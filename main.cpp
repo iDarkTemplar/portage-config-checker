@@ -246,7 +246,7 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 							{
 								if (useFlagIter->second.getLastValue() == enabled)
 								{
-									printf("Error in file %s at line %d: USE-flag %s for atom %s already set with same value in %s\n", location.c_str(), line, flag.c_str(), packet.c_str(), useFlagIter->second.getLocation().c_str());
+									printf("Error in file %s at line %d: USE-flag %s for atom %s already set to same value in %s\n", location.c_str(), line, flag.c_str(), packet.c_str(), useFlagIter->second.getLocation().c_str());
 								}
 							}
 
@@ -262,7 +262,19 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 								printf("Error in file %s at line %d: USE-flag %s for atom %s set %s already set in file %s to state %s\n",location.c_str(), line, flag.c_str(), packet.c_str(), enabled?("Enabled"):("Disabled"), packageUseFlagIter->second.getLocation().c_str(), packageUseFlagIter->second.getLastValue()?("Enabled"):("Disabled"));
 							}
 
-							useFlag.setLocation(location/* + std::string(", line: ") + std::string()*/); // TODO: write line
+							char linebuf[100];
+							int res;
+							res = snprintf(linebuf,sizeof(linebuf)-1,"%d",line);
+
+							if (res > 0)
+							{
+								linebuf[res] = 0;
+								useFlag.setLocation(location + std::string(" at line ") + std::string(linebuf));
+							}
+							else
+							{
+								useFlag.setLocation(location);
+							}
 
 							if (enabled)
 							{
@@ -307,7 +319,7 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 									}
 								}
 
-								fclose(make_pipe);
+								pclose(make_pipe);
 
 								if (!valid_flag)
 								{
@@ -485,7 +497,7 @@ int check_main_use_file(std::string location, std::map<std::string, UseFlag>& us
 			}
 		}
 
-		fclose(make_pipe);
+		pclose(make_pipe);
 	}
 	else
 	{
