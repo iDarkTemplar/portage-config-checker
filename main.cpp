@@ -20,6 +20,11 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <dirent.h>
+#include <string.h>
+
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <string>
 #include <map>
@@ -46,16 +51,21 @@ public:
 
 	UseFlag& operator=(const UseFlag& useFlag);
 
+	std::string getLocation() { return m_location; }
+	void setLocation(std::string value) { m_location = value; }
+
 private:
 	unsigned char m_enabled;
 	unsigned char m_disabled;
 	bool m_last_value;
+	std::string m_location;
 };
 
 UseFlag::UseFlag()
 	: m_last_value(true),
 	m_enabled(0),
-	m_disabled(0)
+	m_disabled(0),
+	m_location()
 {
 }
 
@@ -68,16 +78,96 @@ UseFlag& UseFlag::operator=(const UseFlag& useFlag)
 	return *this;
 }
 
+void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags);
+void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags);
+
+void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags)
+{
+	// TODO: work on file
+	printf("Processing file:   %s\n", location.c_str());
+
+	FILE *f = fopen(location.c_str(),"r");
+	if (f != NULL)
+	{
+		int c;
+
+		for (;;)
+		{
+			c = fgetc(f);
+
+			if (c == EOF)
+			{
+				break;
+			}
+		}
+
+		fclose(f);
+	}
+	else
+	{
+		printf("Error opening file %s\n", location.c_str());
+	}
+}
+
+void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags)
+{
+	struct stat buffer;
+	int status;
+
+	status = stat(location.c_str(), &buffer);
+
+	if (status != -1)
+	{
+		if ((buffer.st_mode & __S_IFMT) == __S_IFDIR)
+		{
+			DIR *dirp;
+			struct dirent *dp;
+
+			printf("Opening directory: %s\n", location.c_str());
+
+			if ((dirp = opendir(location.c_str())) == NULL)
+			{
+				printf("Error: couldn't open directory %s\n", location.c_str());
+				return;
+			}
+
+			do {
+				if ((dp = readdir(dirp)) != NULL)
+				{
+					if ((strcmp(dp->d_name,".") != 0) && (strcmp(dp->d_name,"..") != 0))
+					{
+						search_entry_rec(location + std::string("/") + std::string(dp->d_name), useFlags, packageUseFlags);
+					}
+				}
+			} while (dp != NULL);
+
+			closedir(dirp);
+		}
+		else if ((buffer.st_mode & __S_IFMT) == __S_IFREG)
+		{
+			work_on_file(location, useFlags, packageUseFlags);
+		}
+		else
+		{
+			printf("Unsupported %s type %o\n",location.c_str(), buffer.st_mode & __S_IFMT);
+		}
+	}
+	else
+	{
+		printf("Couldn't stat %s\n", location.c_str());
+	}
+}
+
 int check_use_flags()
 {
 	std::map<std::string, UseFlag> useFlags;
 	useFlags.clear();
 
-	bool flag_valid;
+	std::map<std::pair<std::string, std::string>, UseFlag> packageUseFlags;
+	packageUseFlags.clear();
 
-	printf("Parsing USE-flags...\n");
-
-	printf("Parsing /etc/make.conf...\n");
+	printf("Parsing:           USE-flags...\n");
+	printf("Parsing:           /etc/make.conf...\n");
 
 	FILE *make_pipe = popen("/bin/bash -c 'source /etc/make.conf && echo $USE'", "r");
 	if (make_pipe != NULL)
@@ -86,9 +176,12 @@ int check_use_flags()
 		flag.clear();
 
 		int c;
-		while ((c = fgetc(make_pipe)) != EOF)
+
+		for (;;)
 		{
-			if (!isspace(c))
+			c = fgetc(make_pipe);
+
+			if ((c != EOF) && (!isspace(c)))
 			{
 				flag.append(1, c);
 			}
@@ -96,7 +189,7 @@ int check_use_flags()
 			{
 				if (flag.length() > 0)
 				{
-					flag_valid = true;
+					bool flag_valid = true;
 
 					if (flag[0] == '-')
 					{
@@ -130,6 +223,10 @@ int check_use_flags()
 						{
 							useFlag = useFlagIter->second;
 						}
+						else
+						{
+							useFlag.setLocation(std::string("/etc/make.conf"));
+						}
 
 						if (flag_plus)
 						{
@@ -149,6 +246,11 @@ int check_use_flags()
 
 					flag.clear();
 				}
+			}
+
+			if (c == EOF)
+			{
+				break;
 			}
 		}
 
@@ -172,6 +274,8 @@ int check_use_flags()
 			printf("USE-flag %s set more than once! Last value is: %s\n", useFlagIter->first.c_str(), useFlag.getLastValue()?("Enabled"):("Disabled"));
 		}
 	}
+
+	search_entry_rec(std::string("/etc/portage/package.use"), useFlags, packageUseFlags);
 
 	return 0;
 }
