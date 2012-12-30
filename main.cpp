@@ -22,12 +22,15 @@
 #include <stdio.h>
 #include <dirent.h>
 #include <string.h>
+#include <libgen.h>
 
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <string>
+#include <algorithm>
 #include <map>
+#include <set>
+#include <string>
 
 #include <errno.h>
 
@@ -128,6 +131,59 @@ bool check_atom_name(const std::string& atom)
 	return true;
 }
 
+bool check_atom_installed(const std::string& atom)
+{
+	bool result = false;
+
+	std::string pkg_name = atom;
+	pkg_name.erase(0, pkg_name.rfind('/'));
+
+	if (pkg_name.length() < 2)
+	{
+		return false;
+	}
+
+	pkg_name.erase(0, 1);
+
+	std::string pkg_path = std::string("/var/db/pkg/") + atom;
+
+	char *path = (char*) malloc(pkg_path.length()+1);
+	if (path == NULL)
+	{
+		return false;
+	}
+
+	strcpy(path, pkg_path.c_str());
+
+	char *basedir = dirname(path);
+
+    struct dirent **namelist;
+    int n;
+
+    n = scandir(basedir, &namelist, NULL, alphasort);
+    if (n < 0)
+    {
+    }
+    else
+    {
+        while (n--)
+        {
+            if (strncasecmp(pkg_name.c_str(), namelist[n]->d_name, pkg_name.length()) == 0)
+            {
+				result = true;
+            }
+
+            free(namelist[n]);
+        }
+
+        free(namelist);
+    }
+
+    free(path);
+
+	return result;
+}
+
 bool check_use_name(const std::string& flag)
 {
 	for (int i = 0; i < flag.length(); ++i)
@@ -156,10 +212,10 @@ bool check_use_name(const std::string& flag)
 	return true;
 }
 
-void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags);
-void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags);
+void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList);
+void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList);
 
-void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags)
+void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList)
 {
 	printf("Processing file:   %s\n", location.c_str());
 
@@ -173,6 +229,8 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 		unsigned char stage = 0;
 		unsigned int line = 1;
 		bool process_value = false;
+		bool got_flag = false;
+		bool file_is_empty = true;
 
 		for (;;)
 		{
@@ -220,6 +278,15 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 						{
 							printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, packet.c_str());
 						}
+
+						valid = check_atom_installed(packet);
+
+						if (!valid)
+						{
+							printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, packet.c_str());
+						}
+
+						file_is_empty = false;
 					}
 				}
 				else
@@ -285,53 +352,54 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 								useFlag.setDisabled(useFlag.getDisabled()+1);
 							}
 
-							std::string query = std::string("equery uses ") + std::string(search_all?("-a "):("")) + packet + std::string(" | grep ") + flag;
-
-							FILE *make_pipe = popen(query.c_str(), "r");
-							if (make_pipe != NULL)
+							// Check if uses query was cached for this flag
+							if (packagesFlagsList.find(packet) == packagesFlagsList.end())
 							{
-								int c;
-								std::string result_string;
-								bool valid_flag = false;
+								std::string query = std::string("equery uses ") + std::string(search_all?("-a "):("")) + packet;
 
-								for (;;)
+								FILE *make_pipe = popen(query.c_str(), "r");
+								if (make_pipe != NULL)
 								{
-									c = fgetc(make_pipe);
+									int c;
+									std::string result_string;
 
-									if ((c != EOF) && (!isspace(c)))
+									for (;;)
 									{
-										result_string.append(1,c);
-									}
-									else
-									{
-										result_string.erase(0, 1);
+										c = fgetc(make_pipe);
 
-										if (result_string.compare(flag) == 0)
+										if ((c != EOF) && (!isspace(c)))
 										{
-											valid_flag = true;
+											result_string.append(1,c);
 										}
-
-										result_string.clear();
-										if (c == EOF)
+										else
 										{
-											break;
+											result_string.erase(0, 1);
+											packagesFlagsList[packet].insert(result_string);
+											result_string.clear();
+
+											if (c == EOF)
+											{
+												break;
+											}
 										}
 									}
+
+									pclose(make_pipe);
 								}
-
-								pclose(make_pipe);
-
-								if (!valid_flag)
+								else
 								{
-									printf("Error in file %s at line %d: USE-flag %s doesn't exist for atom %s\n",location.c_str(),line,flag.c_str(),packet.c_str());
+									printf("Couldn't query USE-flags for atom %s\n",packet.c_str());
 								}
 							}
-							else
+
+							if (packagesFlagsList[packet].find(flag) == packagesFlagsList[packet].end())
 							{
-								printf("Couldn't query USE-flags for atom %s\n",packet.c_str());
+								printf("Error in file %s at line %d: USE-flag %s doesn't exist for atom %s\n",location.c_str(),line,flag.c_str(),packet.c_str());
 							}
 
 							packageUseFlags[std::make_pair(flag, packet)] = useFlag;
+
+							got_flag = true;
 						}
 						else
 						{
@@ -342,9 +410,15 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 					}
 				}
 
+				if (((c == '\n')|| (c == EOF)) && (stage == 1) && (!got_flag))
+				{
+					printf("Error in file %s at line %d: atom %s doesn't contain any USE-flags\n",location.c_str(),line,packet.c_str());
+				}
+
 				if (c == '\n')
 				{
 					comment = false;
+					got_flag = false;
 					stage = 0;
 					++line;
 					packet.clear();
@@ -358,6 +432,11 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 		}
 
 		fclose(f);
+
+		if (file_is_empty)
+		{
+			printf("Error in file %s: file is empty\n", location.c_str());
+		}
 	}
 	else
 	{
@@ -365,7 +444,7 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 	}
 }
 
-void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags)
+void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList)
 {
 	struct stat buffer;
 	int status;
@@ -392,7 +471,7 @@ void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useF
 				{
 					if ((strcmp(dp->d_name,".") != 0) && (strcmp(dp->d_name,"..") != 0))
 					{
-						search_entry_rec(location + std::string("/") + std::string(dp->d_name), useFlags, packageUseFlags);
+						search_entry_rec(location + std::string("/") + std::string(dp->d_name), useFlags, packageUseFlags, packagesFlagsList);
 					}
 				}
 			} while (dp != NULL);
@@ -401,7 +480,7 @@ void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useF
 		}
 		else if ((buffer.st_mode & __S_IFMT) == __S_IFREG)
 		{
-			work_on_file(location, useFlags, packageUseFlags);
+			work_on_file(location, useFlags, packageUseFlags, packagesFlagsList);
 		}
 		else
 		{
@@ -509,13 +588,14 @@ int check_use_flags()
 {
 	std::map<std::string, UseFlag> useFlags;
 	std::map<std::pair<std::string, std::string>, UseFlag> packageUseFlags;
+	std::map<std::string, std::set<std::string> > packagesFlagsList;
 
 	printf("Parsing:           USE-flags...\n");
 
 	check_main_use_file(std::string("/etc/make.conf"), useFlags);
 	check_main_use_file(std::string("/etc/portage/make.conf"), useFlags);
 
-	search_entry_rec(std::string("/etc/portage/package.use"), useFlags, packageUseFlags);
+	search_entry_rec(std::string("/etc/portage/package.use"), useFlags, packageUseFlags, packagesFlagsList);
 
 	return 0;
 }
