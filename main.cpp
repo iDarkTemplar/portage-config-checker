@@ -34,55 +34,10 @@
 
 #include <errno.h>
 
+#include "read_file.h"
+#include "use_flag.h"
+
 bool search_all = false;
-
-#define min(a, b) ((a) < (b))?(a):(b)
-
-class UseFlag
-{
-public:
-	static const unsigned char MAX_VALUES = 100;
-	UseFlag();
-
-	unsigned char getEnabled() { return m_enabled; }
-	void setEnabled(unsigned char value) { m_enabled = min(value, MAX_VALUES); m_last_value = true; }
-
-	unsigned char getDisabled() { return m_disabled; }
-	void setDisabled(unsigned char value) { m_disabled = min(value, MAX_VALUES); m_last_value = false; }
-
-	unsigned char getTotalCount() { return m_enabled + m_disabled; }
-	bool getLastValue() { return m_last_value; }
-	void setLastValue(bool value) { m_last_value = value;}
-
-	UseFlag& operator=(const UseFlag& useFlag);
-
-	std::string getLocation() { return m_location; }
-	void setLocation(std::string value) { m_location = value; }
-
-private:
-	unsigned char m_enabled;
-	unsigned char m_disabled;
-	bool m_last_value;
-	std::string m_location;
-};
-
-UseFlag::UseFlag()
-	: m_last_value(true),
-	m_enabled(0),
-	m_disabled(0),
-	m_location()
-{
-}
-
-UseFlag& UseFlag::operator=(const UseFlag& useFlag)
-{
-	this->m_enabled    = useFlag.m_enabled;
-	this->m_disabled   = useFlag.m_disabled;
-	this->m_last_value = useFlag.m_last_value;
-	this->m_location   = useFlag.m_location;
-
-	return *this;
-}
 
 bool check_atom_name(const std::string& atom)
 {
@@ -157,29 +112,29 @@ bool check_atom_installed(const std::string& atom)
 
 	char *basedir = dirname(path);
 
-    struct dirent **namelist;
-    int n;
+	struct dirent **namelist;
+	int n;
 
-    n = scandir(basedir, &namelist, NULL, alphasort);
-    if (n < 0)
-    {
-    }
-    else
-    {
-        while (n--)
-        {
-            if (strncasecmp(pkg_name.c_str(), namelist[n]->d_name, pkg_name.length()) == 0)
-            {
+	n = scandir(basedir, &namelist, NULL, alphasort);
+	if (n < 0)
+	{
+	}
+	else
+	{
+		while (n--)
+		{
+			if (strncasecmp(pkg_name.c_str(), namelist[n]->d_name, pkg_name.length()) == 0)
+			{
 				result = true;
-            }
+			}
 
-            free(namelist[n]);
-        }
+			free(namelist[n]);
+		}
 
-        free(namelist);
-    }
+		free(namelist);
+	}
 
-    free(path);
+	free(path);
 
 	return result;
 }
@@ -222,214 +177,167 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 	FILE *f = fopen(location.c_str(),"r");
 	if (f != NULL)
 	{
-		int c;
-		bool comment = false;
-		std::string packet;
-		std::string flag;
-		unsigned char stage = 0;
+		int result;
 		unsigned int line = 1;
-		bool process_value = false;
-		bool got_flag = false;
+		bool got_flag;
 		bool file_is_empty = true;
+		std::vector<std::string> *data;
 
-		for (;;)
+		do
 		{
-			c = fgetc(f);
+			result = parseFileLine(f, &data);
 
-			if (!comment)
+			if ((result != parse_result_eol) && (result != parse_result_eof))
 			{
-				if ((c != '\n') && (c != EOF) && (!isspace(c)) && (c != '#'))
-				{
-					if (stage == 0)
-					{
-						packet.append(1, c);
-					}
-					else
-					{
-						flag.append(1, c);
-					}
-				}
-
-				if (c == '#')
-				{
-					comment = true;
-					process_value = true;
-				}
+				break;
 			}
 
-			if ((c == '\n') || (c == EOF) || (isspace(c)))
+			if (!data->empty())
 			{
-				process_value = true;
-			}
+				file_is_empty = false;
 
-			if (process_value)
-			{
-				process_value = false;
+				bool valid = check_atom_name(data->at(0));
 
-				if (stage == 0)
+				if (!valid)
 				{
-					if (packet.length() > 0)
-					{
-						stage = 1;
-
-						bool valid = check_atom_name(packet);
-
-						if (!valid)
-						{
-							printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, packet.c_str());
-						}
-
-						valid = check_atom_installed(packet);
-
-						if (!valid)
-						{
-							printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, packet.c_str());
-						}
-
-						file_is_empty = false;
-					}
+					printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, data->at(0).c_str());
 				}
-				else
+
+				valid = check_atom_installed(data->at(0));
+
+				if (!valid)
 				{
-					if (flag.length() > 0)
+					printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, data->at(0).c_str());
+				}
+
+				got_flag = false;
+
+				for (std::vector<std::string>::iterator i = data->begin() + 1; i != data->end(); ++i)
+				{
+					valid = check_use_name(*i);
+
+					if (valid)
 					{
-						bool valid = check_use_name(flag);
+						got_flag = true;
 
-						if (valid)
+						bool enabled = true;
+
+						if ((*i)[0] == '-')
 						{
-							bool enabled = true;
+							enabled = false;
+							(*i).erase(0, 1);
+						}
 
-							if (flag[0] == '-')
+						// if contains same flag in same state in make.conf
+						std::map<std::string, UseFlag>::iterator useFlagIter;
+						useFlagIter = useFlags.find(*i);
+
+						if (useFlagIter != useFlags.end())
+						{
+							if (useFlagIter->second.getLastValue() == enabled)
 							{
-								enabled = false;
-								flag.erase(0, 1);
+								printf("Error in file %s at line %d: USE-flag %s for atom %s already set to same value in %s\n", location.c_str(), line, (*i).c_str(), data->at(0).c_str(), useFlagIter->second.getLocation().c_str());
 							}
+						}
 
-							// if contains same flag in same state in make.conf
-							std::map<std::string, UseFlag>::iterator useFlagIter;
-							useFlagIter = useFlags.find(flag);
+						// same flag in some other files, then warning
+						UseFlag useFlag;
 
-							if (useFlagIter != useFlags.end())
-							{
-								if (useFlagIter->second.getLastValue() == enabled)
-								{
-									printf("Error in file %s at line %d: USE-flag %s for atom %s already set to same value in %s\n", location.c_str(), line, flag.c_str(), packet.c_str(), useFlagIter->second.getLocation().c_str());
-								}
-							}
+						std::map<std::pair<std::string, std::string>, UseFlag>::iterator packageUseFlagIter;
+						packageUseFlagIter = packageUseFlags.find(std::make_pair((*i), data->at(0)));
 
-							// same flag in some other files, then warning
-							UseFlag useFlag;
+						if (packageUseFlagIter != packageUseFlags.end())
+						{
+							useFlag = packageUseFlagIter->second;
+							printf("Error in file %s at line %d: USE-flag %s for atom %s set %s already set in file %s to state %s\n",location.c_str(), line, (*i).c_str(), data->at(0).c_str(), enabled?("Enabled"):("Disabled"), packageUseFlagIter->second.getLocation().c_str(), packageUseFlagIter->second.getLastValue()?("Enabled"):("Disabled"));
+						}
 
-							std::map<std::pair<std::string, std::string>, UseFlag>::iterator packageUseFlagIter;
-							packageUseFlagIter = packageUseFlags.find(std::make_pair(flag, packet));
+						char linebuf[100];
+						int res;
+						res = snprintf(linebuf,sizeof(linebuf)-1,"%d",line);
 
-							if (packageUseFlagIter != packageUseFlags.end())
-							{
-								useFlag = packageUseFlagIter->second;
-								printf("Error in file %s at line %d: USE-flag %s for atom %s set %s already set in file %s to state %s\n",location.c_str(), line, flag.c_str(), packet.c_str(), enabled?("Enabled"):("Disabled"), packageUseFlagIter->second.getLocation().c_str(), packageUseFlagIter->second.getLastValue()?("Enabled"):("Disabled"));
-							}
-
-							char linebuf[100];
-							int res;
-							res = snprintf(linebuf,sizeof(linebuf)-1,"%d",line);
-
-							if (res > 0)
-							{
-								linebuf[res] = 0;
-								useFlag.setLocation(location + std::string(" at line ") + std::string(linebuf));
-							}
-							else
-							{
-								useFlag.setLocation(location);
-							}
-
-							if (enabled)
-							{
-								useFlag.setEnabled(useFlag.getEnabled()+1);
-							}
-							else
-							{
-								useFlag.setDisabled(useFlag.getDisabled()+1);
-							}
-
-							// Check if uses query was cached for this flag
-							if (packagesFlagsList.find(packet) == packagesFlagsList.end())
-							{
-								std::string query = std::string("equery uses ") + std::string(search_all?("-a "):("")) + packet;
-
-								FILE *make_pipe = popen(query.c_str(), "r");
-								if (make_pipe != NULL)
-								{
-									int c;
-									std::string result_string;
-
-									for (;;)
-									{
-										c = fgetc(make_pipe);
-
-										if ((c != EOF) && (!isspace(c)))
-										{
-											result_string.append(1,c);
-										}
-										else
-										{
-											result_string.erase(0, 1);
-											packagesFlagsList[packet].insert(result_string);
-											result_string.clear();
-
-											if (c == EOF)
-											{
-												break;
-											}
-										}
-									}
-
-									pclose(make_pipe);
-								}
-								else
-								{
-									printf("Couldn't query USE-flags for atom %s\n",packet.c_str());
-								}
-							}
-
-							if (packagesFlagsList[packet].find(flag) == packagesFlagsList[packet].end())
-							{
-								printf("Error in file %s at line %d: USE-flag %s doesn't exist for atom %s\n",location.c_str(),line,flag.c_str(),packet.c_str());
-							}
-
-							packageUseFlags[std::make_pair(flag, packet)] = useFlag;
-
-							got_flag = true;
+						if (res > 0)
+						{
+							linebuf[res] = 0;
+							useFlag.setLocation(location + std::string(" at line ") + std::string(linebuf));
 						}
 						else
 						{
-							printf("Error in file %s at line %d: invalid USE-flag %s\n", location.c_str(), line, flag.c_str());
+							useFlag.setLocation(location);
 						}
 
-						flag.clear();
+						if (enabled)
+						{
+							useFlag.setEnabled(useFlag.getEnabled()+1);
+						}
+						else
+						{
+							useFlag.setDisabled(useFlag.getDisabled()+1);
+						}
+
+						// Check if uses query was cached for this flag
+						if (packagesFlagsList.find(data->at(0)) == packagesFlagsList.end())
+						{
+							std::string query = std::string("equery uses ") + std::string(search_all?("-a "):("")) + data->at(0);
+
+							FILE *make_pipe = popen(query.c_str(), "r");
+							if (make_pipe != NULL)
+							{
+								int c;
+								std::string result_string;
+
+								for (;;)
+								{
+									c = fgetc(make_pipe);
+
+									if ((c != EOF) && (!isspace(c)))
+									{
+										result_string.append(1,c);
+									}
+									else
+									{
+										result_string.erase(0, 1);
+										packagesFlagsList[data->at(0)].insert(result_string);
+										result_string.clear();
+
+										if (c == EOF)
+										{
+											break;
+										}
+									}
+								}
+
+								pclose(make_pipe);
+							}
+							else
+							{
+								printf("Couldn't query USE-flags for atom %s\n",data->at(0).c_str());
+							}
+						}
+
+						if (packagesFlagsList[data->at(0)].find(*i) == packagesFlagsList[data->at(0)].end())
+						{
+							printf("Error in file %s at line %d: USE-flag %s doesn't exist for atom %s\n",location.c_str(),line,(*i).c_str(),data->at(0).c_str());
+						}
+
+						packageUseFlags[std::make_pair((*i), data->at(0))] = useFlag;
+					}
+					else
+					{
+						printf("Error in file %s at line %d: invalid USE-flag %s\n", location.c_str(), line, (*i).c_str());
 					}
 				}
 
-				if (((c == '\n')|| (c == EOF)) && (stage == 1) && (!got_flag))
+				if (!got_flag)
 				{
-					printf("Error in file %s at line %d: atom %s doesn't contain any USE-flags\n",location.c_str(),line,packet.c_str());
-				}
-
-				if (c == '\n')
-				{
-					comment = false;
-					got_flag = false;
-					stage = 0;
-					++line;
-					packet.clear();
-				}
-
-				if (c == EOF)
-				{
-					break;
+					printf("Error in file %s at line %d: atom %s doesn't contain any USE-flags\n",location.c_str(),line, data->at(0).c_str());
 				}
 			}
-		}
+
+			delete data;
+			++line;
+
+		} while (result == parse_result_eol);
 
 		fclose(f);
 

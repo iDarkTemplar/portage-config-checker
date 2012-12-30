@@ -39,8 +39,8 @@ endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
 add_definitions(-D_FILE_OFFSET_BITS=64)
 
-set ( SOURCES main.cpp )
-set ( HEADERS )
+set ( SOURCES use_flag.cpp read_file.cpp main.cpp )
+set ( HEADERS use_flag.h   read_file.h )
 
 add_executable( portage-config-cleaner ${SOURCES} ${HEADERS})
 target_link_libraries( portage-config-cleaner )
