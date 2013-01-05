@@ -39,6 +39,8 @@
 #include "use_flag.h"
 
 bool search_all = false;
+bool skip_uses = false;
+bool skip_else = false;
 
 bool check_use_name(const std::string& flag)
 {
@@ -67,9 +69,6 @@ bool check_use_name(const std::string& flag)
 
 	return true;
 }
-
-void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList);
-void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList);
 
 void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList)
 {
@@ -409,6 +408,138 @@ int check_use_flags()
 	return 0;
 }
 
+void work_on_location(std::string location, std::map<std::string, std::pair<std::string, int> >& atoms, bool check)
+{
+	printf("Processing file:   %s\n", location.c_str());
+
+	FILE *f = fopen(location.c_str(),"r");
+	if (f != NULL)
+	{
+		int result;
+		unsigned int line = 1;
+		bool file_is_empty = true;
+		std::vector<std::string> *data;
+
+		do
+		{
+			result = parseFileLine(f, &data);
+
+			if ((result != parse_result_eol) && (result != parse_result_eof))
+			{
+				break;
+			}
+
+			if (!data->empty())
+			{
+				file_is_empty = false;
+				Atom atom(data->at(0));
+				bool valid = atom.is_valid();
+
+				if (!valid)
+				{
+					printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, atom.atom().c_str());
+				}
+
+				if (check)
+				{
+					valid = atom.check_installed();
+
+					if (!valid)
+					{
+						printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, atom.atom().c_str());
+					}
+				}
+
+				std::map<std::string, std::pair<std::string, int> >::iterator AtomIter;
+
+				AtomIter = atoms.find(atom.atom());
+
+				if (AtomIter != atoms.end())
+				{
+					printf("Warning in file %s at line %d: atom %s already set in file %s at line %d\n",location.c_str(), line, atom.atom().c_str(),  AtomIter->second.first.c_str(), AtomIter->second.second);
+				}
+
+				atoms[atom.atom()] = std::make_pair(location, line);
+			}
+
+			delete data;
+			++line;
+
+		} while (result == parse_result_eol);
+
+		fclose(f);
+
+		if (file_is_empty)
+		{
+			printf("Error in file %s: file is empty\n", location.c_str());
+		}
+	}
+	else
+	{
+		printf("Error opening file %s\n", location.c_str());
+	}
+}
+
+void search_existance_rec(std::string location, std::map<std::string, std::pair<std::string, int> >& atoms, bool check)
+{
+	struct stat buffer;
+	int status;
+
+	status = stat(location.c_str(), &buffer);
+
+	if (status != -1)
+	{
+		if ((buffer.st_mode & __S_IFMT) == __S_IFDIR)
+		{
+			DIR *dirp;
+			struct dirent *dp;
+
+			printf("Opening directory: %s\n", location.c_str());
+
+			if ((dirp = opendir(location.c_str())) == NULL)
+			{
+				printf("Error: couldn't open directory %s\n", location.c_str());
+				return;
+			}
+
+			do {
+				if ((dp = readdir(dirp)) != NULL)
+				{
+					if ((strcmp(dp->d_name,".") != 0) && (strcmp(dp->d_name,"..") != 0))
+					{
+						search_existance_rec(location + std::string("/") + std::string(dp->d_name), atoms, check);
+					}
+				}
+			} while (dp != NULL);
+
+			closedir(dirp);
+		}
+		else if ((buffer.st_mode & __S_IFMT) == __S_IFREG)
+		{
+			work_on_location(location, atoms, check);
+		}
+		else
+		{
+			printf("Unsupported %s type %o\n",location.c_str(), buffer.st_mode & __S_IFMT);
+		}
+	}
+	else
+	{
+		printf("Couldn't stat %s\n", location.c_str());
+	}
+}
+
+int check_existance(std::string path, bool check = true)
+{
+	std::map<std::string, std::pair<std::string, int> > locations;
+
+	printf("Checking:          %s\n", path.c_str());
+
+	search_existance_rec(path, locations, check);
+
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	for (int i = 1; i < argc; ++i)
@@ -418,13 +549,24 @@ int main(int argc, char **argv)
 			printf("Options:\n"
 					"\t--help - shows this info\n"
 					"\t-a - check all use flags, not only for current installed packages\n"
-					"\t\twhen searching for obsolete packages\n");
+					"\t\twhen searching for obsolete packages\n"
+					"\t--skip-uses - skip USE-flags check\n"
+					"\t--skip-else - skip other checks\n"
+				);
 
 			return 0;
 		}
 		else if (strcmp(argv[i],"-a") == 0)
 		{
 			search_all = true;
+		}
+		else if (strcmp(argv[i],"--skip-uses") == 0)
+		{
+			skip_uses = true;
+		}
+		else if (strcmp(argv[i],"--skip-else") == 0)
+		{
+			skip_else = true;
 		}
 		else
 		{
@@ -433,7 +575,34 @@ int main(int argc, char **argv)
 		}
 	}
 
-	check_use_flags();
+	if (skip_uses && skip_else)
+	{
+		printf("Error: both --skip-uses and --skip-else activated\n");
+		return 0;
+	}
+
+	if (!skip_uses)
+	{
+		check_use_flags();
+	}
+
+	if (!skip_else)
+	{
+		if (!skip_uses)
+		{
+			printf("\n");
+		}
+
+		check_existance("/etc/portage/package.keywords");
+		printf("\n");
+		check_existance("/etc/portage/package.license");
+		printf("\n");
+		check_existance("/etc/portage/package.mask", false);
+		printf("\n");
+		check_existance("/etc/portage/package.provided", false);
+		printf("\n");
+		check_existance("/etc/portage/package.unmask");
+	}
 
 	return 0;
 }
