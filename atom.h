@@ -44,6 +44,8 @@ public:
 	const std::string name();
 	const std::string category();
 	const std::string version();
+	const std::string slot();
+	const std::string atom_and_slot();
 	const std::string full_atom();
 	int vop();
 	bool check_installed();
@@ -54,6 +56,7 @@ private:
 	std::string m_category;
 	int m_vop;
 	std::string m_version;
+	std::string m_slot;
 
 	bool check_name(std::string cname);
 };

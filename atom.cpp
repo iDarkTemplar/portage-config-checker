@@ -26,139 +26,50 @@
 #include <string.h>
 #include <libgen.h>
 
+#include <boost/regex.hpp>
+
 Atom::Atom(std::string const_name)
 	: m_valid(false),
 	m_vop(version_none)
 {
-	bool first_char = true;
+	//                       version sign,    category,                            name,                                version,                                    slot
+	boost::regex reg_expr("^([>|>=|=|<=|<]?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*$");
+	boost::smatch reg_results;
 
-	// parse version operation if any
-	if ((const_name[0] == '>') || (const_name[0] == '<'))
+	bool result = boost::regex_match(const_name, reg_results, reg_expr);
+	if (result)
 	{
-		if (const_name[0] == '>')
+		if (reg_results.str(1) == ">")
 		{
-			m_vop |= version_gt;
+			m_vop = version_gt;
 		}
-		else
+		else if (reg_results.str(1) == ">=")
 		{
-			m_vop |= version_lt;
+			m_vop = version_gt_eq;
 		}
-
-		const_name.erase(0, 1);
-	}
-
-	if (const_name[0] == '=')
-	{
-		m_vop |= version_eq;
-		const_name.erase(0, 1);
-	}
-
-	// parse atom category
-	for (int i = 0; i < const_name.length(); ++i)
-	{
-		if ((const_name[i] != '-') && (const_name[i] != '_') && (const_name[i] != '/') && (!isalnum(const_name[i])))
+		else if (reg_results.str(1) == "=")
 		{
-			return;
+			m_vop = version_eq;
+		}
+		else if (reg_results.str(1) == "<")
+		{
+			m_vop = version_lt;
+		}
+		else if (reg_results.str(1) == "<=")
+		{
+			m_vop = version_lt_eq;
 		}
 
-		if (const_name[i] != '/')
-		{
-			m_category.append(1, const_name[i]);
-		}
-		else
-		{
-			const_name.erase(0, i+1);
-			break;
-		}
+		m_category = reg_results.str(2);
+		m_name     = reg_results.str(3);
+		m_version  = reg_results.str(4);
+		m_slot     = reg_results.str(5);
+		m_valid    = true;
 	}
-
-	if (m_category.empty())
-	{
-		return;
-	}
-
-	// parse atom name
-	while (!const_name.empty())
-	{
-		if ((const_name[0] != '-') && (const_name[0] != '_') && (!isalnum(const_name[0])))
-		{
-			return;
-		}
-
-		if (!isalpha(const_name[0]) && first_char)
-		{
-			if (isdigit(const_name[0]))
-			{
-				break;
-			}
-			else
-			{
-				return;
-			}
-		}
-		else
-		{
-			m_name.append(1, const_name[0]);
-
-			first_char = false;
-
-			if (const_name[0] == '-')
-			{
-				first_char = true;
-			}
-
-			const_name.erase(0, 1);
-		}
-	}
-
-	if (m_name.empty())
-	{
-		return;
-	}
-
-	if (m_name.at(m_name.size()-1) == '-')
-	{
-		m_name.erase(m_name.size()-1, 1);
-	}
-
-	if (m_name.empty())
-	{
-		return;
-	}
-
-	// parse atom version, if any
-	for (int i = 0; i < const_name.length(); ++i)
-	{
-		if ((const_name[i] != '-') && (const_name[i] != '_') && (const_name[i] != '.') && (!isalnum(const_name[i])))
-		{
-			return;
-		}
-
-		m_version.append(1, const_name[i]);
-	}
-
-	// check strings
-	if (!check_name(m_category))
-	{
-		return;
-	}
-
-	if (!check_name(m_name))
-	{
-		return;
-	}
-
-	if (!check_name(m_version))
-	{
-		return;
-	}
-
-	m_valid = true;
 }
 
 Atom::~Atom()
 {
-
 }
 
 bool Atom::is_valid()
@@ -186,9 +97,28 @@ const std::string Atom::version()
 	return m_version;
 }
 
+const std::string Atom::slot()
+{
+	return m_slot;
+}
+
+
+const std::string Atom::atom_and_slot()
+{
+	std::string slot;
+
+	if (!m_slot.empty())
+	{
+		slot = ":" + m_slot;
+	}
+
+	return m_category + std::string("/") + m_name + slot;
+}
+
 const std::string Atom::full_atom()
 {
 	std::string v;
+	std::string slot;
 
 	switch (m_vop)
 	{
@@ -212,7 +142,12 @@ const std::string Atom::full_atom()
 		break;
 	}
 
-	return v + m_category + std::string("/") + m_name + std::string("-") + m_version;
+	if (!m_slot.empty())
+	{
+		slot = ":" + m_slot;
+	}
+
+	return v + m_category + std::string("/") + m_name + std::string("-") + m_version + m_slot;
 }
 
 int Atom::vop()
