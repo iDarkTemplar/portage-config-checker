@@ -32,8 +32,8 @@ Atom::Atom(std::string const_name)
 	: m_valid(false),
 	m_vop(version_none)
 {
-	//                       version sign,    category,                            name,                                version,                                    slot
-	boost::regex reg_expr("^([>|>=|=|<=|<]?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*$");
+	//                       version sign,    category,                            name,                                                        version,                                        slot
+	boost::regex reg_expr("^([>|>=|=|<=|<]?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*$");
 	boost::smatch reg_results;
 
 	bool result = boost::regex_match(const_name, reg_results, reg_expr);
@@ -186,6 +186,9 @@ bool Atom::check_name(std::string cname)
 
 bool Atom::check_installed()
 {
+	//                          name,     version
+	boost::regex reg_expr("^" + m_name + "\\-[[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*$");
+
 	if (!m_valid)
 	{
 		return false;
@@ -193,32 +196,18 @@ bool Atom::check_installed()
 
 	bool result = false;
 
-	std::string pkg_path = std::string("/var/db/pkg/") + atom();
-
-	char *path = (char*) malloc(pkg_path.length()+1);
-	if (path == NULL)
-	{
-		return false;
-	}
-
-	strcpy(path, pkg_path.c_str());
-
-	char *basedir = dirname(path);
+	std::string pkg_path = std::string("/var/db/pkg/") + m_category;
 
 	struct dirent **namelist;
 	int n;
 
-	n = scandir(basedir, &namelist, NULL, alphasort);
-	if (n < 0)
-	{
-	}
-	else
+	n = scandir(pkg_path.c_str(), &namelist, NULL, alphasort);
+	if (n >= 0)
 	{
 		while (n--)
 		{
-			if (strncasecmp(m_name.c_str(), namelist[n]->d_name, m_name.length()) == 0)
+			if (boost::regex_match(std::string(namelist[n]->d_name), reg_expr))
 			{
-				// TODO: version check
 				result = true;
 			}
 
@@ -227,8 +216,6 @@ bool Atom::check_installed()
 
 		free(namelist);
 	}
-
-	free(path);
 
 	return result;
 }
