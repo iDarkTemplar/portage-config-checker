@@ -28,7 +28,7 @@
 
 #include <boost/regex.hpp>
 
-Atom::Atom(std::string const_name)
+Atom::Atom(const std::string &const_name)
 	: m_valid(false),
 	m_vop(version_none)
 {
@@ -102,7 +102,6 @@ const std::string Atom::slot()
 	return m_slot;
 }
 
-
 const std::string Atom::atom_and_slot()
 {
 	std::string slot;
@@ -153,35 +152,6 @@ const std::string Atom::full_atom()
 int Atom::vop()
 {
 	return m_vop;
-}
-
-bool Atom::check_name(std::string cname)
-{
-	int pos;
-	std::string spec_smbs = "-_.";
-
-	for (int i = 0; i < spec_smbs.size(); ++i)
-	{
-		pos = -1;
-
-		while ((pos = cname.find(spec_smbs[i], pos+1)) != cname.npos)
-		{
-			if ((pos == 0) || (pos == cname.size() - 1))
-			{
-				return false;
-			}
-
-			for (int j = 0; j < spec_smbs.size(); ++j)
-			{
-				if (cname[pos-1] == spec_smbs[j])
-				{
-					return false;
-				}
-			}
-		}
-	}
-
-	return true;
 }
 
 bool Atom::check_installed()

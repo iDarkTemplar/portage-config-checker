@@ -26,7 +26,7 @@
 class Atom
 {
 public:
-	Atom(std::string const_name);
+	Atom(const std::string &const_name);
 	~Atom();
 
 	enum version_op
@@ -57,8 +57,6 @@ private:
 	int m_vop;
 	std::string m_version;
 	std::string m_slot;
-
-	bool check_name(std::string cname);
 };
 
 #endif // DT_ATOM_H

@@ -41,7 +41,7 @@ public:
 	bool getLastValue();
 	void setLastValue(bool value);
 
-	UseFlag& operator=(const UseFlag& useFlag);
+	UseFlag& operator=(const UseFlag &useFlag);
 
 	std::string getLocation();
 	void setLocation(std::string value);

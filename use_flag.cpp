@@ -27,8 +27,7 @@ const unsigned char UseFlag::MAX_VALUES = 100;
 UseFlag::UseFlag()
 	: m_last_value(true),
 	m_enabled(0),
-	m_disabled(0),
-	m_location()
+	m_disabled(0)
 {
 }
 
@@ -73,7 +72,7 @@ void UseFlag::setLastValue(bool value)
 	m_last_value = value;
 }
 
-UseFlag& UseFlag::operator=(const UseFlag& useFlag)
+UseFlag& UseFlag::operator=(const UseFlag &useFlag)
 {
 	this->m_enabled    = useFlag.m_enabled;
 	this->m_disabled   = useFlag.m_disabled;
