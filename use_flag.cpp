@@ -25,9 +25,9 @@
 const unsigned char UseFlag::MAX_VALUES = 100;
 
 UseFlag::UseFlag()
-	: m_last_value(true),
-	m_enabled(0),
-	m_disabled(0)
+	: m_enabled(0),
+	m_disabled(0),
+	m_last_value(true)
 {
 }
 

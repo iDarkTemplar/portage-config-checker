@@ -146,7 +146,7 @@ const std::string Atom::full_atom()
 		slot = ":" + m_slot;
 	}
 
-	return v + m_category + std::string("/") + m_name + std::string("-") + m_version + m_slot;
+	return v + m_category + std::string("/") + m_name + std::string("-") + m_version + slot;
 }
 
 int Atom::vop()

@@ -373,6 +373,8 @@ int check_main_use_file(std::string location, std::map<std::string, UseFlag>& us
 	{
 		printf("Error sourcing %s, errno %d\n", location.c_str(), errno);
 	}
+
+	return 0;
 }
 
 int check_use_flags()
