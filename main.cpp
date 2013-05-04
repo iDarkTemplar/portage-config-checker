@@ -40,22 +40,96 @@
 
 #include <boost/regex.hpp>
 
+bool make_check = false;
+bool full_make_check = false;
 bool search_all = false;
 bool skip_uses = false;
 bool skip_else = false;
 
-bool check_use_name(const std::string& flag)
+bool check_use_name(const std::string &flag)
 {
 	boost::regex reg_expr("[\\-]?[[:alnum:]]+(?:[\\-_][[:alnum:]]+)*");
-	//boost::regex reg_expr("^([>|>=|=|<=|<]?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*$");
-
 	return boost::regex_match(flag, reg_expr);
 }
 
-void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList)
+void check_use_flag_existance(const std::string &flag, const std::string &location)
 {
-	printf("Processing file:   %s\n", location.c_str());
+	FILE *make_pipe = popen(("equery hasuse " + (full_make_check)?("-p -o "):("") + flag + " | wc -l").c_str(), "r");
+	if (make_pipe != NULL)
+	{
+		int c;
+		std::string result_string;
 
+		while ((c = fgetc(make_pipe)) != EOF)
+		{
+			result_string.append(1,c);
+		}
+
+		pclose(make_pipe);
+
+		if (result_string == "0")
+		{
+			printf("Error in file %s: USE-flag %s doesn't exist\n", location.c_str(), flag.c_str());
+		}
+	}
+	else
+	{
+		printf("Couldn't query existance of USE-flag %s\n", flag.c_str());
+	}
+}
+
+std::vector<std::string> find_all_files(const std::string &location)
+{
+	std::vector<std::string> files;
+	struct stat buffer;
+	int status;
+
+	status = stat(location.c_str(), &buffer);
+
+	if (status != -1)
+	{
+		if ((buffer.st_mode & __S_IFMT) == __S_IFDIR)
+		{
+			DIR *dirp;
+			struct dirent *dp;
+
+			if ((dirp = opendir(location.c_str())) == NULL)
+			{
+				printf("Error: couldn't open directory %s\n", location.c_str());
+				return files;
+			}
+
+			do
+			{
+				if ((dp = readdir(dirp)) != NULL)
+				{
+					if ((strcmp(dp->d_name,".") != 0) && (strcmp(dp->d_name,"..") != 0))
+					{
+						std::vector<std::string> res = find_all_files(location + std::string("/") + std::string(dp->d_name));
+
+						files.reserve(files.size() + res.size());
+
+						for (size_t i = 0; i < res.size(); ++i)
+						{
+							files.push_back(res.at(i));
+						}
+					}
+				}
+			} while (dp != NULL);
+
+			closedir(dirp);
+		}
+		else if ((buffer.st_mode & __S_IFMT) == __S_IFREG)
+		{
+			files.push_back(location);
+		}
+	}
+
+	return files;
+}
+
+void check_use_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList)
+{
 	FILE *f = fopen(location.c_str(),"r");
 	if (f != NULL)
 	{
@@ -63,21 +137,21 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 		unsigned int line = 1;
 		bool got_flag;
 		bool file_is_empty = true;
-		std::vector<std::string> *data;
+		std::vector<std::string> data;
 
 		do
 		{
-			result = parseFileLine(f, &data);
+			result = parseFileLine(f, data);
 
 			if ((result != parse_result_eol) && (result != parse_result_eof))
 			{
 				break;
 			}
 
-			if (!data->empty())
+			if (!data.empty())
 			{
 				file_is_empty = false;
-				Atom atom(data->at(0));
+				Atom atom(data.at(0));
 				bool valid = atom.is_valid() && (atom.vop() == Atom::version_none) && (atom.version().size() == 0);
 
 				if (!valid)
@@ -94,7 +168,7 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 
 				got_flag = false;
 
-				for (std::vector<std::string>::iterator i = data->begin() + 1; i != data->end(); ++i)
+				for (std::vector<std::string>::iterator i = data.begin() + 1; i != data.end(); ++i)
 				{
 					valid = check_use_name(*i);
 
@@ -216,9 +290,8 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 				}
 			}
 
-			delete data;
+			data.clear();
 			++line;
-
 		} while (result == parse_result_eol);
 
 		fclose(f);
@@ -231,56 +304,6 @@ void work_on_file(std::string location, std::map<std::string, UseFlag>& useFlags
 	else
 	{
 		printf("Error opening file %s\n", location.c_str());
-	}
-}
-
-void search_entry_rec(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList)
-{
-	struct stat buffer;
-	int status;
-
-	status = stat(location.c_str(), &buffer);
-
-	if (status != -1)
-	{
-		if ((buffer.st_mode & __S_IFMT) == __S_IFDIR)
-		{
-			DIR *dirp;
-			struct dirent *dp;
-
-			printf("Opening directory: %s\n", location.c_str());
-
-			if ((dirp = opendir(location.c_str())) == NULL)
-			{
-				printf("Error: couldn't open directory %s\n", location.c_str());
-				return;
-			}
-
-			do
-			{
-				if ((dp = readdir(dirp)) != NULL)
-				{
-					if ((strcmp(dp->d_name,".") != 0) && (strcmp(dp->d_name,"..") != 0))
-					{
-						search_entry_rec(location + std::string("/") + std::string(dp->d_name), useFlags, packageUseFlags, packagesFlagsList);
-					}
-				}
-			} while (dp != NULL);
-
-			closedir(dirp);
-		}
-		else if ((buffer.st_mode & __S_IFMT) == __S_IFREG)
-		{
-			work_on_file(location, useFlags, packageUseFlags, packagesFlagsList);
-		}
-		else
-		{
-			printf("Unsupported %s type %o\n",location.c_str(), buffer.st_mode & __S_IFMT);
-		}
-	}
-	else
-	{
-		printf("Couldn't stat %s\n", location.c_str());
 	}
 }
 
@@ -338,6 +361,11 @@ int check_main_use_file(std::string location, std::map<std::string, UseFlag>& us
 						}
 						else
 						{
+							if (make_check || full_make_check)
+							{
+								check_use_flag_existance(flag, location);
+							}
+
 							useFlag.setLocation(location);
 						}
 
@@ -379,6 +407,7 @@ int check_main_use_file(std::string location, std::map<std::string, UseFlag>& us
 
 int check_use_flags()
 {
+	std::vector<std::string> filelist;
 	std::map<std::string, UseFlag> useFlags;
 	std::map<std::pair<std::string, std::string>, UseFlag> packageUseFlags;
 	std::map<std::string, std::set<std::string> > packagesFlagsList;
@@ -388,36 +417,42 @@ int check_use_flags()
 	check_main_use_file(std::string("/etc/make.conf"), useFlags);
 	check_main_use_file(std::string("/etc/portage/make.conf"), useFlags);
 
-	search_entry_rec(std::string("/etc/portage/package.use"), useFlags, packageUseFlags, packagesFlagsList);
+	filelist = find_all_files("/etc/portage/package.use");
+
+	printf("Processing:        /etc/portage/package.use\n");
+
+	for (size_t i = 0; i < filelist.size(); ++i)
+	{
+		printf("Processing file:   %s\n", filelist.at(i).c_str());
+		check_use_file(filelist.at(i), useFlags, packageUseFlags, packagesFlagsList);
+	}
 
 	return 0;
 }
 
-void work_on_location(std::string location, std::map<std::string, std::pair<std::string, int> >& atoms, bool check)
+void check_aux_file(std::string location, std::map<std::string, std::pair<std::string, int> >& atoms, bool check)
 {
-	printf("Processing file:   %s\n", location.c_str());
-
 	FILE *f = fopen(location.c_str(),"r");
 	if (f != NULL)
 	{
 		int result;
 		unsigned int line = 1;
 		bool file_is_empty = true;
-		std::vector<std::string> *data;
+		std::vector<std::string> data;
 
 		do
 		{
-			result = parseFileLine(f, &data);
+			result = parseFileLine(f, data);
 
 			if ((result != parse_result_eol) && (result != parse_result_eof))
 			{
 				break;
 			}
 
-			if (!data->empty())
+			if (!data.empty())
 			{
 				file_is_empty = false;
-				Atom atom(data->at(0));
+				Atom atom(data.at(0));
 				bool valid = atom.is_valid();
 
 				if (!valid)
@@ -447,9 +482,8 @@ void work_on_location(std::string location, std::map<std::string, std::pair<std:
 				atoms[atom.atom_and_slot()] = std::make_pair(location, line);
 			}
 
-			delete data;
+			data.clear();
 			++line;
-
 		} while (result == parse_result_eol);
 
 		fclose(f);
@@ -465,62 +499,20 @@ void work_on_location(std::string location, std::map<std::string, std::pair<std:
 	}
 }
 
-void search_existance_rec(std::string location, std::map<std::string, std::pair<std::string, int> >& atoms, bool check)
-{
-	struct stat buffer;
-	int status;
-
-	status = stat(location.c_str(), &buffer);
-
-	if (status != -1)
-	{
-		if ((buffer.st_mode & __S_IFMT) == __S_IFDIR)
-		{
-			DIR *dirp;
-			struct dirent *dp;
-
-			printf("Opening directory: %s\n", location.c_str());
-
-			if ((dirp = opendir(location.c_str())) == NULL)
-			{
-				printf("Error: couldn't open directory %s\n", location.c_str());
-				return;
-			}
-
-			do {
-				if ((dp = readdir(dirp)) != NULL)
-				{
-					if ((strcmp(dp->d_name,".") != 0) && (strcmp(dp->d_name,"..") != 0))
-					{
-						search_existance_rec(location + std::string("/") + std::string(dp->d_name), atoms, check);
-					}
-				}
-			} while (dp != NULL);
-
-			closedir(dirp);
-		}
-		else if ((buffer.st_mode & __S_IFMT) == __S_IFREG)
-		{
-			work_on_location(location, atoms, check);
-		}
-		else
-		{
-			printf("Unsupported %s type %o\n",location.c_str(), buffer.st_mode & __S_IFMT);
-		}
-	}
-	else
-	{
-		printf("Couldn't stat %s\n", location.c_str());
-	}
-}
-
 int check_existance(std::string path, bool check = true)
 {
+	std::vector<std::string> filelist;
 	std::map<std::string, std::pair<std::string, int> > locations;
 
 	printf("Checking:          %s\n", path.c_str());
 
-	search_existance_rec(path, locations, check);
+	filelist = find_all_files(path);
+
+	for (size_t i = 0; i < filelist.size(); ++i)
+	{
+		printf("Processing file:   %s\n", filelist.at(i).c_str());
+		check_aux_file(filelist.at(i), locations, check);
+	}
 
 	return 0;
 }
@@ -533,6 +525,9 @@ int main(int argc, char **argv)
 		{
 			printf("Options:\n"
 					"\t--help - shows this info\n"
+					"\t--make-check - quick make.conf USE-flags existance check\n"
+					"\t--full-make-check - full make.conf USE-flags existance check\n"
+					"\t\tWarning: may take very long time\n"
 					"\t-a - check all use flags, not only for current installed packages\n"
 					"\t\twhen searching for obsolete packages\n"
 					"\t--skip-uses - skip USE-flags check\n"
@@ -540,6 +535,14 @@ int main(int argc, char **argv)
 				);
 
 			return 0;
+		}
+		else if (strcmp(argv[i],"--make-check") == 0)
+		{
+			make_check = true;
+		}
+		else if (strcmp(argv[i],"--full-make-check") == 0)
+		{
+			full_make_check = true;
 		}
 		else if (strcmp(argv[i],"-a") == 0)
 		{

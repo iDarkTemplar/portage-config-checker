@@ -20,24 +20,11 @@
 
 #include "read_file.h"
 
-int parseFileLine(FILE *f, std::vector<std::string> **results)
+int parseFileLine(FILE *f, std::vector<std::string> &results)
 {
-	if ((f == NULL) || (results == NULL))
+	if (f == NULL)
 	{
 		return parse_error_einval;
-	}
-
-	try
-	{
-		*results = new std::vector<std::string>;
-		if (*results == NULL)
-		{
-			throw std::bad_alloc();
-		}
-	}
-	catch (std::bad_alloc&)
-	{
-		return parse_error_memory;
 	}
 
 	int c;
@@ -59,7 +46,6 @@ int parseFileLine(FILE *f, std::vector<std::string> **results)
 				}
 				catch (std::bad_alloc&)
 				{
-					delete *results;
 					return parse_error_memory;
 				}
 			}
@@ -84,12 +70,11 @@ int parseFileLine(FILE *f, std::vector<std::string> **results)
 			{
 				try
 				{
-					(*results)->push_back(atom);
+					results.push_back(atom);
 					atom.clear();
 				}
 				catch (std::bad_alloc&)
 				{
-					delete *results;
 					return parse_error_memory;
 				}
 			}

@@ -33,6 +33,6 @@ enum parse_result
 	parse_error_memory = -2
 };
 
-int parseFileLine(FILE *f, std::vector<std::string> **results);
+int parseFileLine(FILE *f, std::vector<std::string> &results);
 
 #endif // DT_READ_FILE_H
