@@ -174,14 +174,29 @@ bool Atom::check_installed()
 	n = scandir(pkg_path.c_str(), &namelist, NULL, alphasort);
 	if (n >= 0)
 	{
-		while (n--)
+		try
 		{
-			if (boost::regex_match(std::string(namelist[n]->d_name), reg_expr))
+			while (n--)
 			{
-				result = true;
+				if (boost::regex_match(std::string(namelist[n]->d_name), reg_expr))
+				{
+					result = true;
+				}
+
+				free(namelist[n]);
+			}
+		}
+		catch (...)
+		{
+			free(namelist[n]);
+
+			while (n--)
+			{
+				free(namelist[n]);
 			}
 
-			free(namelist[n]);
+			free(namelist);
+			throw;
 		}
 
 		free(namelist);

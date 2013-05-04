@@ -29,8 +29,7 @@ enum parse_result
 {
 	parse_result_eof = 1,
 	parse_result_eol = 0,
-	parse_error_einval = -1,
-	parse_error_memory = -2
+	parse_error_einval = -1
 };
 
 int parseFileLine(FILE *f, std::vector<std::string> &results);

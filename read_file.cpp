@@ -40,14 +40,7 @@ int parseFileLine(FILE *f, std::vector<std::string> &results)
 		{
 			if ((c != '\n') && (c != EOF) && (!isspace(c)) && (c != '#'))
 			{
-				try
-				{
-					atom.append(1, c);
-				}
-				catch (std::bad_alloc&)
-				{
-					return parse_error_memory;
-				}
+				atom.append(1, c);
 			}
 
 			if (c == '#')
@@ -68,15 +61,8 @@ int parseFileLine(FILE *f, std::vector<std::string> &results)
 
 			if (atom.length() > 0)
 			{
-				try
-				{
-					results.push_back(atom);
-					atom.clear();
-				}
-				catch (std::bad_alloc&)
-				{
-					return parse_error_memory;
-				}
+				results.push_back(atom);
+				atom.clear();
 			}
 
 			if (c == '\n')
