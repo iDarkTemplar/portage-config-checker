@@ -48,7 +48,7 @@ bool skip_else = false;
 
 bool check_use_name(const std::string &flag)
 {
-	boost::regex reg_expr("[\\-]?[[:alnum:]]+(?:[\\-_][[:alnum:]]+)*");
+	boost::regex reg_expr("[\\-]?[[:alnum:]][\\+[:alnum:]]*(?:[\\-_][[:alnum:]][\\+[:alnum:]]*)*");
 	return boost::regex_match(flag, reg_expr);
 }
 
@@ -618,6 +618,8 @@ int main(int argc, char **argv)
 			printf("\n");
 		}
 
+		check_existance("/etc/portage/package.env");
+		printf("\n");
 		check_existance("/etc/portage/package.keywords");
 		printf("\n");
 		check_existance("/etc/portage/package.license");
