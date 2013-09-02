@@ -32,8 +32,8 @@ Atom::Atom(const std::string &const_name)
 	: m_valid(false),
 	m_vop(version_none)
 {
-	//                       version sign,    category,                            name,                                                        version,                                        slot
-	boost::regex reg_expr("^([>|>=|=|<=|<]?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*$");
+	//                       version sign,     category,                            name,                                                        version,                                        slot
+	boost::regex reg_expr("^((?:>|>=|=|<=|<)?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*$");
 	boost::smatch reg_results;
 
 	bool result = boost::regex_match(const_name, reg_results, reg_expr);
