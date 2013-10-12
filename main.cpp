@@ -163,7 +163,7 @@ void check_use_file(std::string location, std::map<std::string, UseFlag>& useFla
 				{
 					file_is_empty = false;
 					Atom atom(data.at(0));
-					bool valid = atom.is_valid() && (atom.vop() == Atom::version_none) && (atom.version().size() == 0);
+					bool valid = atom.is_valid() && (atom.vop() == Atom::version_none) && (atom.version().empty());
 
 					if (!valid)
 					{
@@ -484,7 +484,9 @@ void check_aux_file(std::string location, std::map<std::string, std::pair<std::s
 				{
 					file_is_empty = false;
 					Atom atom(data.at(0));
-					bool valid = atom.is_valid();
+					bool valid = atom.is_valid()
+						&& (((atom.vop() == Atom::version_none) && (atom.version().empty()))
+							|| ((atom.vop() != Atom::version_none) && (!atom.version().empty())));
 
 					if (!valid)
 					{

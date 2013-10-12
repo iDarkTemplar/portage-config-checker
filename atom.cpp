@@ -39,25 +39,32 @@ Atom::Atom(const std::string &const_name)
 	bool result = boost::regex_match(const_name, reg_results, reg_expr);
 	if (result)
 	{
-		if (reg_results.str(1) == ">")
+		if (!reg_results.str(1).empty())
 		{
-			m_vop = version_gt;
-		}
-		else if (reg_results.str(1) == ">=")
-		{
-			m_vop = version_gt_eq;
-		}
-		else if (reg_results.str(1) == "=")
-		{
-			m_vop = version_eq;
-		}
-		else if (reg_results.str(1) == "<")
-		{
-			m_vop = version_lt;
-		}
-		else if (reg_results.str(1) == "<=")
-		{
-			m_vop = version_lt_eq;
+			if (reg_results.str(1) == ">")
+			{
+				m_vop = version_gt;
+			}
+			else if (reg_results.str(1) == ">=")
+			{
+				m_vop = version_gt_eq;
+			}
+			else if (reg_results.str(1) == "=")
+			{
+				m_vop = version_eq;
+			}
+			else if (reg_results.str(1) == "<")
+			{
+				m_vop = version_lt;
+			}
+			else if (reg_results.str(1) == "<=")
+			{
+				m_vop = version_lt_eq;
+			}
+			else
+			{
+				return;
+			}
 		}
 
 		m_category = reg_results.str(2);
