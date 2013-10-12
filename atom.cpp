@@ -32,9 +32,18 @@ Atom::Atom(const std::string &const_name)
 	: m_valid(false),
 	m_vop(version_none)
 {
-	//                       version sign,     category,                            name,                                                        version,                                        slot
-	boost::regex reg_expr("^((?:>|>=|=|<=|<)?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))*$");
+	//                       version sign,     category,                            name,                                                         version,                                        slot,                                           repository
+	boost::regex reg_expr("^((?:>|>=|=|<=|<)?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?(?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?$");
 	boost::smatch reg_results;
+
+	/* Regexp parts:
+	 * version sign: ((?:>|>=|=|<=|<)?)
+	 * category:     ([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)
+	 * name:         ([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*)
+	 * version:      (?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?
+	 * slot:         (?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?
+	 * repository:   (?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?
+	 */
 
 	bool result = boost::regex_match(const_name, reg_results, reg_expr);
 	if (result)
@@ -67,11 +76,16 @@ Atom::Atom(const std::string &const_name)
 			}
 		}
 
-		m_category = reg_results.str(2);
-		m_name     = reg_results.str(3);
-		m_version  = reg_results.str(4);
-		m_slot     = reg_results.str(5);
-		m_valid    = true;
+		m_category   = reg_results.str(2);
+		m_name       = reg_results.str(3);
+		m_version    = reg_results.str(4);
+		m_slot       = reg_results.str(5);
+		m_repository = reg_results.str(6);
+		m_valid      = true;
+
+		m_atom          = calculate_atom();
+		m_atom_and_slot = calculate_atom_and_slot();
+		m_full_atom     = calculate_full_atom();
 	}
 }
 
@@ -79,89 +93,57 @@ Atom::~Atom()
 {
 }
 
-bool Atom::is_valid()
+bool Atom::is_valid() const
 {
 	return m_valid;
 }
 
-const std::string Atom::atom()
+const std::string& Atom::atom() const
 {
-	return m_category + std::string("/") + m_name;
+	return m_atom;
 }
 
-const std::string Atom::name()
+const std::string& Atom::name() const
 {
 	return m_name;
 }
 
-const std::string Atom::category()
+const std::string& Atom::category() const
 {
 	return m_category;
 }
 
-const std::string Atom::version()
+const std::string& Atom::version() const
 {
 	return m_version;
 }
 
-const std::string Atom::slot()
+const std::string& Atom::slot() const
 {
 	return m_slot;
 }
 
-const std::string Atom::atom_and_slot()
+const std::string& Atom::atom_and_slot() const
 {
-	std::string slot;
-
-	if (!m_slot.empty())
-	{
-		slot = ":" + m_slot;
-	}
-
-	return m_category + std::string("/") + m_name + slot;
+	return m_atom_and_slot;
 }
 
-const std::string Atom::full_atom()
+const std::string& Atom::full_atom() const
 {
-	std::string v;
-	std::string slot;
-
-	switch (m_vop)
-	{
-	case version_gt:
-		v = std::string(">");
-		break;
-	case version_lt:
-		v = std::string("<");
-		break;
-	case version_eq:
-		v = std::string("=");
-		break;
-	case version_gt_eq:
-		v = std::string(">=");
-		break;
-	case version_lt_eq:
-		v = std::string("<=");
-		break;
-	case version_none:
-	default:
-		break;
-	}
-
-	if (!m_slot.empty())
-	{
-		slot = ":" + m_slot;
-	}
-
-	return v + m_category + std::string("/") + m_name + std::string("-") + m_version + slot;
+	return m_full_atom;
 }
 
-int Atom::vop()
+const std::string& Atom::repository() const
+{
+	return m_repository;
+}
+
+Atom::version_op Atom::vop() const
 {
 	return m_vop;
 }
 
-bool Atom::check_installed()
+bool Atom::check_installed() const
 {
 	//                          name,     version
 	boost::regex reg_expr("^" + m_name + "\\-[[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*$");
@@ -210,4 +192,68 @@ bool Atom::check_installed()
 	}
 
 	return result;
+}
+
+std::string Atom::calculate_atom()
+{
+	return m_category + std::string("/") + m_name;
+}
+
+std::string Atom::calculate_atom_and_slot()
+{
+	std::string slot;
+
+	if (!m_slot.empty())
+	{
+		slot = ":" + m_slot;
+	}
+
+	return m_category + std::string("/") + m_name + slot;
+}
+
+std::string Atom::calculate_full_atom()
+{
+	std::string v;
+	std::string slot;
+	std::string repo;
+	std::string ver;
+
+	switch (m_vop)
+	{
+	case version_gt:
+		v = std::string(">");
+		break;
+	case version_lt:
+		v = std::string("<");
+		break;
+	case version_eq:
+		v = std::string("=");
+		break;
+	case version_gt_eq:
+		v = std::string(">=");
+		break;
+	case version_lt_eq:
+		v = std::string("<=");
+		break;
+	case version_none:
+	default:
+		break;
+	}
+
+	if (!m_slot.empty())
+	{
+		slot = ":" + m_slot;
+	}
+
+	if (!m_repository.empty())
+	{
+		repo = "::" + m_repository;
+	}
+
+	if (!m_version.empty())
+	{
+		ver = std::string("-") + m_version;
+	}
+
+	return v + m_category + std::string("/") + m_name + ver + slot + repo;
 }

@@ -167,14 +167,14 @@ void check_use_file(std::string location, std::map<std::string, UseFlag>& useFla
 
 					if (!valid)
 					{
-						printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, atom.atom_and_slot().c_str());
+						printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, atom.full_atom().c_str());
 					}
 
 					valid = atom.check_installed();
 
 					if (!valid)
 					{
-						printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, atom.atom_and_slot().c_str());
+						printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, atom.full_atom().c_str());
 					}
 
 					got_flag = false;
@@ -490,7 +490,7 @@ void check_aux_file(std::string location, std::map<std::string, std::pair<std::s
 
 					if (!valid)
 					{
-						printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, atom.atom_and_slot().c_str());
+						printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, atom.full_atom().c_str());
 					}
 
 					if (check)
@@ -499,7 +499,7 @@ void check_aux_file(std::string location, std::map<std::string, std::pair<std::s
 
 						if (!valid)
 						{
-							printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, atom.atom_and_slot().c_str());
+							printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, atom.full_atom().c_str());
 						}
 					}
 

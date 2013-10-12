@@ -39,24 +39,36 @@ public:
 		version_none = 0
 	};
 
-	bool is_valid();
-	const std::string atom();
-	const std::string name();
-	const std::string category();
-	const std::string version();
-	const std::string slot();
-	const std::string atom_and_slot();
-	const std::string full_atom();
-	int vop();
-	bool check_installed();
+	bool is_valid() const;
+	const std::string& atom() const;
+	const std::string& name() const;
+	const std::string& category() const;
+	const std::string& version() const;
+	const std::string& slot() const;
+	const std::string& atom_and_slot() const;
+	const std::string& full_atom() const;
+	const std::string& repository() const;
+	version_op vop() const;
+	bool check_installed() const;
 
 private:
 	bool m_valid;
 	std::string m_name;
 	std::string m_category;
-	int m_vop;
+	version_op m_vop;
 	std::string m_version;
 	std::string m_slot;
+	std::string m_repository;
+
+	// constructed values
+	std::string m_atom;
+	std::string m_atom_and_slot;
+	std::string m_full_atom;
+
+	// construction functions
+	std::string calculate_atom();
+	std::string calculate_atom_and_slot();
+	std::string calculate_full_atom();
 };
 
 #endif // DT_ATOM_H
