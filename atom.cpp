@@ -32,14 +32,14 @@ Atom::Atom(const std::string &const_name)
 	: m_valid(false),
 	m_vop(version_none)
 {
-	//                       version sign,     category,                            name,                                                         version,                                        slot,                                           repository
-	boost::regex reg_expr("^((?:>|>=|=|<=|<)?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?(?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?$");
+	//                       version sign,     category,                            name,                                                                         version,                                        slot,                                           repository
+	boost::regex reg_expr("^((?:>|>=|=|<=|<)?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alpha:]](?:[[:alnum:]]|\\+)*(?:[\\-_\\.][[:alpha:]](?:[[:alnum:]]|\\+)*)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?(?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?$");
 	boost::smatch reg_results;
 
 	/* Regexp parts:
 	 * version sign: ((?:>|>=|=|<=|<)?)
 	 * category:     ([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)
-	 * name:         ([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*)
+	 * name:         ([[:alpha:]](?:[[:alnum:]]|\\+)*(?:[\\-_\\.][[:alpha:]](?:[[:alnum:]]|\\+)*)*)
 	 * version:      (?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?
 	 * slot:         (?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?
 	 * repository:   (?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?
@@ -145,8 +145,20 @@ Atom::version_op Atom::vop() const
 
 bool Atom::check_installed() const
 {
-	//                          name,     version
-	boost::regex reg_expr("^" + m_name + "\\-[[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*$");
+	std::string name_str = m_name;
+
+	{
+		size_t index = name_str.rfind('+');
+
+		while (index != std::string::npos)
+		{
+			name_str.replace(index, 1, "\\+");
+			index = name_str.rfind('+', index);
+		}
+	}
+
+	//                          name,          version
+	boost::regex reg_expr("^" + name_str + "\\-[[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*$");
 
 	if (!m_valid)
 	{
@@ -208,7 +220,7 @@ std::string Atom::calculate_atom_and_slot()
 		slot = ":" + m_slot;
 	}
 
-	return m_category + std::string("/") + m_name + slot;
+	return m_atom + slot;
 }
 
 std::string Atom::calculate_full_atom()
@@ -255,5 +267,50 @@ std::string Atom::calculate_full_atom()
 		ver = std::string("-") + m_version;
 	}
 
-	return v + m_category + std::string("/") + m_name + ver + slot + repo;
+	return v + m_atom + ver + slot + repo;
+}
+
+Atom& Atom::operator=(const Atom &other)
+{
+	if (this != &other)
+	{
+		this->m_valid      = other.m_valid;
+		this->m_name       = other.m_name;
+		this->m_category   = other.m_category;
+		this->m_vop        = other.m_vop;
+		this->m_version    = other.m_version;
+		this->m_slot       = other.m_slot;
+		this->m_repository = other.m_repository;
+
+		this->m_atom          = other.m_atom;
+		this->m_atom_and_slot = other.m_atom_and_slot;
+		this->m_full_atom     = other.m_full_atom;
+	}
+
+	return *this;
+}
+
+bool Atom::operator<(const Atom &other) const
+{
+	return (this->m_name < other.m_name)
+		|| ((this->m_name == other.m_name)
+			&& ((this->m_category < other.m_category)
+				|| ((this->m_category == other.m_category)
+					&& ((this->m_vop < other.m_vop)
+						|| ((this->m_vop == other.m_vop)
+							&& ((this->m_version < other.m_version)
+								|| ((this->m_version == other.m_version)
+									&& ((this->m_slot < other.m_slot)
+										|| ((this->m_slot == other.m_slot)
+											&& (this->m_repository < other.m_repository))))))))));
+}
+
+bool Atom::operator==(const Atom &other) const
+{
+	return (this->m_name       == other.m_name)
+		&& (this->m_category   == other.m_category)
+		&& (this->m_vop        == other.m_vop)
+		&& (this->m_version    == other.m_version)
+		&& (this->m_slot       == other.m_slot)
+		&& (this->m_repository == other.m_repository);
 }

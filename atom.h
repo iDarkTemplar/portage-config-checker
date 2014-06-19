@@ -29,6 +29,11 @@ public:
 	Atom(const std::string &const_name);
 	~Atom();
 
+	Atom& operator=(const Atom &other);
+
+	bool operator<(const Atom &other) const;
+	bool operator==(const Atom &other) const;
+
 	enum version_op
 	{
 		version_gt = 1,

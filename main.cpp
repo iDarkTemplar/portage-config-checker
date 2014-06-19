@@ -141,7 +141,7 @@ std::vector<std::string> find_all_files(const std::string &location)
 	return files;
 }
 
-void check_use_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, std::string>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList)
+void check_use_file(std::string location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, Atom>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList)
 {
 	FILE *f = fopen(location.c_str(),"r");
 	if (f != NULL)
@@ -167,7 +167,7 @@ void check_use_file(std::string location, std::map<std::string, UseFlag>& useFla
 
 					if (!valid)
 					{
-						printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, atom.full_atom().c_str());
+						printf("Error in file %s at line %d: invalid or formated unsupported way atom %s\n", location.c_str(), line, data.at(0).c_str());
 					}
 
 					valid = atom.check_installed();
@@ -210,8 +210,8 @@ void check_use_file(std::string location, std::map<std::string, UseFlag>& useFla
 							// same flag in some other files, then warning
 							UseFlag useFlag;
 
-							std::map<std::pair<std::string, std::string>, UseFlag>::iterator packageUseFlagIter;
-							packageUseFlagIter = packageUseFlags.find(std::make_pair((*i), atom.atom_and_slot()));
+							std::map<std::pair<std::string, Atom>, UseFlag>::iterator packageUseFlagIter;
+							packageUseFlagIter = packageUseFlags.find(std::make_pair((*i), atom));
 
 							if (packageUseFlagIter != packageUseFlags.end())
 							{
@@ -295,7 +295,7 @@ void check_use_file(std::string location, std::map<std::string, UseFlag>& useFla
 								printf("Error in file %s at line %d: USE-flag %s doesn't exist for atom %s\n",location.c_str(),line,(*i).c_str(),atom.atom_and_slot().c_str());
 							}
 
-							packageUseFlags[std::make_pair((*i), atom.atom_and_slot())] = useFlag;
+							packageUseFlags[std::make_pair((*i), atom)] = useFlag;
 						}
 						else
 						{
@@ -442,7 +442,7 @@ int check_use_flags()
 {
 	std::vector<std::string> filelist;
 	std::map<std::string, UseFlag> useFlags;
-	std::map<std::pair<std::string, std::string>, UseFlag> packageUseFlags;
+	std::map<std::pair<std::string, Atom>, UseFlag> packageUseFlags;
 	std::map<std::string, std::set<std::string> > packagesFlagsList;
 
 	printf("Parsing:           USE-flags...\n");
@@ -465,7 +465,7 @@ int check_use_flags()
 
 void check_aux_file(std::string location, std::map<std::string, std::pair<std::string, int> >& atoms, bool check)
 {
-	FILE *f = fopen(location.c_str(),"r");
+	FILE *f = fopen(location.c_str(), "r");
 	if (f != NULL)
 	{
 		bool file_is_empty = true;
@@ -490,7 +490,7 @@ void check_aux_file(std::string location, std::map<std::string, std::pair<std::s
 
 					if (!valid)
 					{
-						printf("Error in file %s at line %d: invalid atom %s\n", location.c_str(), line, atom.full_atom().c_str());
+						printf("Error in file %s at line %d: invalid or formated unsupported way atom %s\n", location.c_str(), line, data.at(0).c_str());
 					}
 
 					if (check)
@@ -555,6 +555,13 @@ int check_existance(std::string path, bool check = true)
 
 	return 0;
 }
+
+/*
+ * TODO: tree of atoms: each atom can have one or more parents with some values.
+ * If it is more than one parent, give warning.
+ * If atom duplicates parent, give warning
+ * Do same for package mask/unmask
+ */
 
 int main(int argc, char **argv)
 {
