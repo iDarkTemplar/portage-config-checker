@@ -31,20 +31,20 @@ public:
 	UseFlag();
 	~UseFlag();
 
-	unsigned char getEnabled();
+	unsigned char getEnabled() const;
 	void setEnabled(unsigned char value);
 
-	unsigned char getDisabled();
+	unsigned char getDisabled() const;
 	void setDisabled(unsigned char value);
 
-	unsigned char getTotalCount();
-	bool getLastValue();
+	unsigned char getTotalCount() const;
+	bool getLastValue() const;
 	void setLastValue(bool value);
 
 	UseFlag& operator=(const UseFlag &useFlag);
 
-	std::string getLocation();
-	void setLocation(std::string value);
+	const std::string& getLocation() const;
+	void setLocation(const std::string &value);
 
 private:
 	unsigned char m_enabled;

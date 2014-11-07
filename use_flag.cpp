@@ -35,7 +35,7 @@ UseFlag::~UseFlag()
 {
 }
 
-unsigned char UseFlag::getEnabled()
+unsigned char UseFlag::getEnabled() const
 {
 	return m_enabled;
 }
@@ -46,7 +46,7 @@ void UseFlag::setEnabled(unsigned char value)
 	m_last_value = true;
 }
 
-unsigned char UseFlag::getDisabled()
+unsigned char UseFlag::getDisabled() const
 {
 	return m_disabled;
 }
@@ -57,12 +57,12 @@ void UseFlag::setDisabled(unsigned char value)
 	m_last_value = false;
 }
 
-unsigned char UseFlag::getTotalCount()
+unsigned char UseFlag::getTotalCount() const
 {
 	return m_enabled + m_disabled;
 }
 
-bool UseFlag::getLastValue()
+bool UseFlag::getLastValue() const
 {
 	return m_last_value;
 }
@@ -82,12 +82,12 @@ UseFlag& UseFlag::operator=(const UseFlag &useFlag)
 	return *this;
 }
 
-std::string UseFlag::getLocation()
+const std::string& UseFlag::getLocation() const
 {
 	return m_location;
 }
 
-void UseFlag::setLocation(std::string value)
+void UseFlag::setLocation(const std::string &value)
 {
 	m_location = value;
 }
