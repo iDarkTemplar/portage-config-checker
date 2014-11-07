@@ -32,18 +32,24 @@ Atom::Atom(const std::string &const_name)
 	: m_valid(false),
 	m_vop(version_none)
 {
-	//                       version sign,     category,                            name,                                                                         version,                                        slot,                                           repository
-	boost::regex reg_expr("^((?:>|>=|=|<=|<)?)([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)/([[:alpha:]](?:[[:alnum:]]|\\+)*(?:[\\-_\\.][[:alpha:]](?:[[:alnum:]]|\\+)*)*)(?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?(?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?(?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?$");
-	boost::smatch reg_results;
+	boost::regex reg_expr("^"
+		// version sign
+		"((?:>|>=|=|<=|<)?)"
+		// category
+		"([[:alpha:]][[:alnum:]]*(?:[\\-_][[:alnum:]]+)*)"
+		// category and name delimiter
+		"/"
+		// name
+		"([[:alpha:]](?:[[:alnum:]]|\\+)*(?:[\\-_\\.][[:alpha:]](?:[[:alnum:]]|\\+)*)*)"
+		// version
+		"(?:\\-([[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*))?"
+		// slot
+		"(?:\\:([[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*))?"
+		// repository
+		"(?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?"
+		"$");
 
-	/* Regexp parts:
-	 * version sign: ((?:>|>=|=|<=|<)?)
-	 * category:     ([[:alnum:]]+(?:[\\-_][[:alnum:]]+)*)
-	 * name:         ([[:alpha:]](?:[[:alnum:]]|\\+)*(?:[\\-_\\.][[:alpha:]](?:[[:alnum:]]|\\+)*)*)
-	 * version:      (?:\\-([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?
-	 * slot:         (?:\\:([[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*))?
-	 * repository:   (?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?
-	 */
+	boost::smatch reg_results;
 
 	bool result = boost::regex_match(const_name, reg_results, reg_expr);
 	if (result)
@@ -158,7 +164,7 @@ bool Atom::check_installed() const
 	}
 
 	//                          name,          version
-	boost::regex reg_expr("^" + name_str + "\\-[[:digit:]]+(?:[\\-_\\.][[:alnum:]]+)*$");
+	boost::regex reg_expr("^" + name_str + "\\-[[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*$");
 
 	if (!m_valid)
 	{
