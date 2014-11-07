@@ -141,6 +141,57 @@ std::vector<std::string> find_all_files(const std::string &location)
 	return files;
 }
 
+void run_query(const std::string &query, const std::string &atom_string, const Atom &atom, std::map<std::string, std::set<std::string> > &packagesFlagsList, bool save_only_atom)
+{
+	FILE *make_pipe = popen(query.c_str(), "r");
+	if (make_pipe != NULL)
+	{
+		try
+		{
+			int c;
+			std::string result_string;
+
+			for (;;)
+			{
+				c = fgetc(make_pipe);
+
+				if ((c != EOF) && (!isspace(c)))
+				{
+					result_string.append(1,c);
+				}
+				else
+				{
+					result_string.erase(0, 1);
+					packagesFlagsList[atom.atom_and_slot()].insert(result_string);
+
+					if (save_only_atom)
+					{
+						packagesFlagsList[atom.atom()].insert(result_string);
+					}
+
+					result_string.clear();
+
+					if (c == EOF)
+					{
+						break;
+					}
+				}
+			}
+		}
+		catch (...)
+		{
+			pclose(make_pipe);
+			throw;
+		}
+
+		pclose(make_pipe);
+	}
+	else
+	{
+		printf("Couldn't query USE-flags for atom %s\n", atom_string.c_str());
+	}
+}
+
 void check_use_file(const std::string &location, std::map<std::string, UseFlag>& useFlags, std::map<std::pair<std::string, Atom>, UseFlag>& packageUseFlags, std::map<std::string, std::set<std::string> > &packagesFlagsList)
 {
 	FILE *f = fopen(location.c_str(),"r");
@@ -254,48 +305,36 @@ void check_use_file(const std::string &location, std::map<std::string, UseFlag>&
 							// Check if uses query was cached for this flag
 							if (packagesFlagsList.find(atom.atom_and_slot()) == packagesFlagsList.end())
 							{
-								std::string query = std::string("equery uses ") + std::string(search_all?("-a "):("")) + atom.atom_and_slot();
-
-								FILE *make_pipe = popen(query.c_str(), "r");
-								if (make_pipe != NULL)
+								if (search_all)
 								{
-									try
-									{
-										int c;
-										std::string result_string;
+									std::string query = std::string("equery uses -a ") + atom.atom_and_slot();
 
-										for (;;)
-										{
-											c = fgetc(make_pipe);
-
-											if ((c != EOF) && (!isspace(c)))
-											{
-												result_string.append(1,c);
-											}
-											else
-											{
-												result_string.erase(0, 1);
-												packagesFlagsList[atom.atom_and_slot()].insert(result_string);
-												result_string.clear();
-
-												if (c == EOF)
-												{
-													break;
-												}
-											}
-										}
-									}
-									catch (...)
-									{
-										pclose(make_pipe);
-										throw;
-									}
-
-									pclose(make_pipe);
+									run_query(query, atom.atom_and_slot(), atom, packagesFlagsList, false);
 								}
 								else
 								{
-									printf("Couldn't query USE-flags for atom %s\n",atom.atom_and_slot().c_str());
+									std::list<Atom> installed_atoms = atom.get_all_installed_packages();
+
+									if (!installed_atoms.empty())
+									{
+										for (std::list<Atom>::iterator atom_iter = installed_atoms.begin(); atom_iter != installed_atoms.end(); ++atom_iter)
+										{
+											if ((!atom.slot().empty()) && (atom_iter->slot() != atom.slot()))
+											{
+												continue;
+											}
+
+											std::string query = std::string("equery uses =") + atom_iter->atom() + std::string("-") + atom_iter->version();
+
+											run_query(query, std::string("=") + atom_iter->atom() + std::string("-") + atom_iter->version(), *atom_iter, packagesFlagsList, true);
+										}
+									}
+									else
+									{
+										std::string query = std::string("equery uses ") + atom.atom_and_slot();
+
+										run_query(query, atom.atom_and_slot(), atom, packagesFlagsList, false);
+									}
 								}
 							}
 

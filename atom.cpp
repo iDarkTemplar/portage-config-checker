@@ -28,6 +28,12 @@
 
 #include <boost/regex.hpp>
 
+Atom::Atom()
+	: m_valid(false),
+	m_vop(version_none)
+{
+}
+
 Atom::Atom(const std::string &const_name)
 	: m_valid(false),
 	m_vop(version_none)
@@ -87,11 +93,11 @@ Atom::Atom(const std::string &const_name)
 		m_version    = reg_results.str(4);
 		m_slot       = reg_results.str(5);
 		m_repository = reg_results.str(6);
-		m_valid      = true;
 
-		m_atom          = calculate_atom();
-		m_atom_and_slot = calculate_atom_and_slot();
-		m_full_atom     = calculate_full_atom();
+		calculate_atom();
+		calculate_atom_and_slot();
+		calculate_full_atom();
+		m_valid = true;
 	}
 }
 
@@ -166,12 +172,12 @@ bool Atom::check_installed() const
 	//                          name,          version
 	boost::regex reg_expr("^" + name_str + "\\-[[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*$");
 
+	bool result = false;
+
 	if (!m_valid)
 	{
-		return false;
+		return result;
 	}
-
-	bool result = false;
 
 	std::string pkg_path = std::string("/var/db/pkg/") + m_category;
 
@@ -192,6 +198,8 @@ bool Atom::check_installed() const
 
 				free(namelist[n]);
 			}
+
+			free(namelist);
 		}
 		catch (...)
 		{
@@ -205,19 +213,128 @@ bool Atom::check_installed() const
 			free(namelist);
 			throw;
 		}
-
-		free(namelist);
 	}
 
 	return result;
 }
 
-std::string Atom::calculate_atom()
+std::list<Atom> Atom::get_all_installed_packages() const
 {
-	return m_category + std::string("/") + m_name;
+	std::string name_str = m_name;
+
+	{
+		size_t index = name_str.rfind('+');
+
+		while (index != std::string::npos)
+		{
+			name_str.replace(index, 1, "\\+");
+			index = name_str.rfind('+', index);
+		}
+	}
+
+	//                          name,          version
+	boost::regex reg_expr("^" + name_str + "\\-([[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*)$");
+
+	std::list<Atom> result;
+
+	if (!m_valid)
+	{
+		return result;
+	}
+
+	std::string pkg_path = std::string("/var/db/pkg/") + m_category;
+
+	struct dirent **namelist;
+	int n;
+
+	n = scandir(pkg_path.c_str(), &namelist, NULL, alphasort);
+	if (n >= 0)
+	{
+		try
+		{
+			while (n--)
+			{
+				boost::smatch reg_results;
+
+				if (boost::regex_match(std::string(namelist[n]->d_name), reg_results, reg_expr))
+				{
+					Atom atom;
+					atom.m_category = m_category;
+					atom.m_name = m_name;
+					atom.m_version = reg_results.str(1);
+					atom.m_slot = get_slot_of_package(m_category + std::string("/") + std::string(namelist[n]->d_name));
+					atom.calculate_atom();
+					atom.calculate_atom_and_slot();
+					atom.calculate_full_atom();
+					atom.m_valid = m_valid;
+					result.push_back(atom);
+				}
+
+				free(namelist[n]);
+			}
+
+			free(namelist);
+		}
+		catch (...)
+		{
+			free(namelist[n]);
+
+			while (n--)
+			{
+				free(namelist[n]);
+			}
+
+			free(namelist);
+			throw;
+		}
+	}
+
+	return result;
 }
 
-std::string Atom::calculate_atom_and_slot()
+std::string Atom::get_slot_of_package(const std::string &atom_and_version)
+{
+	std::string filename = std::string("/var/db/portage/") + atom_and_version +  std::string("/SLOT");
+	std::string result;
+	FILE *f;
+
+	f = fopen(filename.c_str(), "r");
+	if (f != NULL)
+	{
+		try
+		{
+			int c;
+
+			for (;;)
+			{
+				c = fgetc(f);
+
+				if ((c == '\n') || (c == EOF) || (isspace(c)))
+				{
+					break;
+				}
+
+				result.append(1, c);
+			}
+
+			fclose(f);
+		}
+		catch (...)
+		{
+			fclose(f);
+			throw;
+		}
+	}
+
+	return result;
+}
+
+void Atom::calculate_atom()
+{
+	m_atom = m_category + std::string("/") + m_name;
+}
+
+void Atom::calculate_atom_and_slot()
 {
 	std::string slot;
 
@@ -226,10 +343,10 @@ std::string Atom::calculate_atom_and_slot()
 		slot = ":" + m_slot;
 	}
 
-	return m_atom + slot;
+	m_atom_and_slot = m_atom + slot;
 }
 
-std::string Atom::calculate_full_atom()
+void Atom::calculate_full_atom()
 {
 	std::string v;
 	std::string slot;
@@ -273,7 +390,7 @@ std::string Atom::calculate_full_atom()
 		ver = std::string("-") + m_version;
 	}
 
-	return v + m_atom + ver + slot + repo;
+	m_full_atom = v + m_atom + ver + slot + repo;
 }
 
 Atom& Atom::operator=(const Atom &other)

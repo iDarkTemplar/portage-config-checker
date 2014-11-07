@@ -22,6 +22,7 @@
 #define DT_ATOM_H
 
 #include <string>
+#include <list>
 
 class Atom
 {
@@ -56,7 +57,13 @@ public:
 	version_op vop() const;
 	bool check_installed() const;
 
+	std::list<Atom> get_all_installed_packages() const;
+
 private:
+	Atom();
+
+	static std::string get_slot_of_package(const std::string &atom_and_version);
+
 	bool m_valid;
 	std::string m_name;
 	std::string m_category;
@@ -71,9 +78,9 @@ private:
 	std::string m_full_atom;
 
 	// construction functions
-	std::string calculate_atom();
-	std::string calculate_atom_and_slot();
-	std::string calculate_full_atom();
+	void calculate_atom();
+	void calculate_atom_and_slot();
+	void calculate_full_atom();
 };
 
 #endif // DT_ATOM_H
