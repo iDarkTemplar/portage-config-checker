@@ -22,7 +22,7 @@
 #define DT_ATOM_H
 
 #include <string>
-#include <list>
+#include <set>
 
 class Atom
 {
@@ -57,7 +57,7 @@ public:
 	version_op vop() const;
 	bool check_installed() const;
 
-	std::list<Atom> get_all_installed_packages() const;
+	std::set<Atom> get_all_installed_packages() const;
 
 private:
 	Atom();

@@ -87,9 +87,9 @@ void check_use_flag_existance(const std::string &flag, const std::string &locati
 	}
 }
 
-std::vector<std::string> find_all_files(const std::string &location)
+std::set<std::string> find_all_files(const std::string &location)
 {
-	std::vector<std::string> files;
+	std::set<std::string> files;
 	struct stat buffer;
 
 	if (stat(location.c_str(), &buffer) != -1)
@@ -112,14 +112,8 @@ std::vector<std::string> find_all_files(const std::string &location)
 					{
 						if ((strcmp(dp->d_name,".") != 0) && (strcmp(dp->d_name,"..") != 0))
 						{
-							std::vector<std::string> res = find_all_files(location + std::string("/") + std::string(dp->d_name));
-
-							files.reserve(files.size() + res.size());
-
-							for (size_t i = 0; i < res.size(); ++i)
-							{
-								files.push_back(res.at(i));
-							}
+							std::set<std::string> res = find_all_files(location + std::string("/") + std::string(dp->d_name));
+							files.insert(res.begin(), res.end());
 						}
 					}
 				} while (dp != NULL);
@@ -134,7 +128,7 @@ std::vector<std::string> find_all_files(const std::string &location)
 		}
 		else if (S_ISREG(buffer.st_mode))
 		{
-			files.push_back(location);
+			files.insert(location);
 		}
 	}
 
@@ -313,11 +307,12 @@ void check_use_file(const std::string &location, std::map<std::string, UseFlag>&
 								}
 								else
 								{
-									std::list<Atom> installed_atoms = atom.get_all_installed_packages();
+									std::set<Atom> installed_atoms = atom.get_all_installed_packages();
 
 									if (!installed_atoms.empty())
 									{
-										for (std::list<Atom>::iterator atom_iter = installed_atoms.begin(); atom_iter != installed_atoms.end(); ++atom_iter)
+										std::set<Atom>::const_iterator atom_end = installed_atoms.end();
+										for (std::set<Atom>::const_iterator atom_iter = installed_atoms.begin(); atom_iter != atom_end; ++atom_iter)
 										{
 											if ((!atom.slot().empty()) && (atom_iter->slot() != atom.slot()))
 											{
@@ -380,112 +375,114 @@ void check_use_file(const std::string &location, std::map<std::string, UseFlag>&
 	}
 }
 
-int check_main_use_file(const std::string &location, std::map<std::string, UseFlag>& useFlags)
+int check_main_use_file(const std::string &location, const std::set<std::string> &filelist, std::map<std::string, UseFlag>& useFlags)
 {
-	struct stat buffer;
+	printf("Parsing:           %s...\n", location.c_str());
 
-	if ((stat(location.c_str(), &buffer) != -1) && (S_ISREG(buffer.st_mode)))
+	std::stringstream query_stream;
+	query_stream << "/bin/bash -c '";
+
+	std::set<std::string>::const_iterator list_end = filelist.end();
+	for (std::set<std::string>::const_iterator list_item = filelist.begin(); list_item != list_end; ++list_item)
 	{
-		printf("Parsing:           %s...\n", location.c_str());
+		query_stream << "source " << *list_item << "; ";
+	}
 
-		std::string query = std::string("/bin/bash -c 'source ") + location.c_str() + std::string(" && echo $USE'");
+	query_stream << "echo $USE'";
 
-		FILE *make_pipe = popen(query.c_str(), "r");
+	FILE *make_pipe = popen(query_stream.str().c_str(), "r");
 
-		query.clear();
-
-		if (make_pipe != NULL)
+	if (make_pipe != NULL)
+	{
+		try
 		{
-			try
+			std::string flag;
+			int c;
+
+			for (;;)
 			{
-				std::string flag;
-				int c;
+				c = fgetc(make_pipe);
 
-				for (;;)
+				if ((c != EOF) && (!isspace(c)))
 				{
-					c = fgetc(make_pipe);
+					flag.append(1, c);
+				}
+				else
+				{
+					if (flag.length() > 0)
+					{
+						bool flag_valid;
 
-					if ((c != EOF) && (!isspace(c)))
-					{
-						flag.append(1, c);
-					}
-					else
-					{
-						if (flag.length() > 0)
+						flag_valid = check_use_name(flag);
+
+						if (flag_valid)
 						{
-							bool flag_valid;
+							bool flag_plus = true;
 
-							flag_valid = check_use_name(flag);
-
-							if (flag_valid)
+							if (flag[0] == '-')
 							{
-								bool flag_plus = true;
+								flag_plus = false;
+								flag.erase(0, 1);
+							}
 
-								if (flag[0] == '-')
-								{
-									flag_plus = false;
-									flag.erase(0, 1);
-								}
+							UseFlag useFlag;
 
-								UseFlag useFlag;
+							std::map<std::string, UseFlag>::iterator useFlagIter;
 
-								std::map<std::string, UseFlag>::iterator useFlagIter;
+							useFlagIter = useFlags.find(flag);
 
-								useFlagIter = useFlags.find(flag);
-
-								if (useFlagIter != useFlags.end())
-								{
-									useFlag = useFlagIter->second;
-									printf("Error in file %s: USE-flag %s for set %s already set in file %s to state %s\n", location.c_str(), flag.c_str(), flag_plus?("Enabled"):("Disabled"), useFlagIter->second.getLocation().c_str(), useFlagIter->second.getLastValue()?("Enabled"):("Disabled"));
-								}
-								else
-								{
-									if (make_check || full_make_check)
-									{
-										check_use_flag_existance(flag, location);
-									}
-
-									useFlag.setLocation(location);
-								}
-
-								if (flag_plus)
-								{
-									useFlag.setEnabled(useFlag.getEnabled()+1);
-								}
-								else
-								{
-									useFlag.setDisabled(useFlag.getDisabled()+1);
-								}
-
-								useFlags[flag] = useFlag;
+							if (useFlagIter != useFlags.end())
+							{
+								useFlag = useFlagIter->second;
+								printf("Error in file %s: USE-flag %s for set %s already set in file %s to state %s\n", location.c_str(), flag.c_str(), flag_plus?("Enabled"):("Disabled"), useFlagIter->second.getLocation().c_str(), useFlagIter->second.getLastValue()?("Enabled"):("Disabled"));
 							}
 							else
 							{
-								printf("Invalid USE-flag \"%s\" in %s\n", flag.c_str(), location.c_str());
+								if (make_check || full_make_check)
+								{
+									check_use_flag_existance(flag, location);
+								}
+
+								useFlag.setLocation(location);
 							}
 
-							flag.clear();
-						}
-					}
+							if (flag_plus)
+							{
+								useFlag.setEnabled(useFlag.getEnabled()+1);
+							}
+							else
+							{
+								useFlag.setDisabled(useFlag.getDisabled()+1);
+							}
 
-					if (c == EOF)
-					{
-						break;
+							useFlags[flag] = useFlag;
+						}
+						else
+						{
+							printf("Invalid USE-flag \"%s\" in %s\n", flag.c_str(), location.c_str());
+						}
+
+						flag.clear();
 					}
 				}
-			}
-			catch (...)
-			{
-				pclose(make_pipe);
-				throw;
-			}
 
-			pclose(make_pipe);
+				if (c == EOF)
+				{
+					break;
+				}
+			}
 		}
-		else
+		catch (...)
 		{
-			printf("Error sourcing %s, errno %d\n", location.c_str(), errno);
+			pclose(make_pipe);
+			throw;
 		}
+
+		pclose(make_pipe);
+	}
+	else
+	{
+		printf("Error sourcing %s, errno %d\n", location.c_str(), errno);
 	}
 
 	return 0;
@@ -493,24 +490,34 @@ int check_main_use_file(const std::string &location, std::map<std::string, UseFl
 
 int check_use_flags()
 {
-	std::vector<std::string> filelist;
+	std::set<std::string> filelist;
 	std::map<std::string, UseFlag> useFlags;
 	std::map<std::pair<std::string, Atom>, UseFlag> packageUseFlags;
 	std::map<std::string, std::set<std::string> > packagesFlagsList;
 
 	printf("Parsing:           USE-flags...\n");
 
-	check_main_use_file(std::string("/etc/make.conf"), useFlags);
-	check_main_use_file(std::string("/etc/portage/make.conf"), useFlags);
+	filelist = find_all_files("/etc/make.conf");
+	if (!filelist.empty())
+	{
+		check_main_use_file("/etc/make.conf", filelist, useFlags);
+	}
+
+	filelist = find_all_files("/etc/portage/make.conf");
+	if (!filelist.empty())
+	{
+		check_main_use_file("/etc/portage/make.conf", filelist, useFlags);
+	}
 
 	filelist = find_all_files("/etc/portage/package.use");
 
 	printf("Processing:        /etc/portage/package.use\n");
 
-	for (size_t i = 0; i < filelist.size(); ++i)
+	std::set<std::string>::const_iterator list_end = filelist.end();
+	for (std::set<std::string>::const_iterator list_item = filelist.begin(); list_item != list_end; ++list_item)
 	{
-		printf("Processing file:   %s\n", filelist.at(i).c_str());
-		check_use_file(filelist.at(i), useFlags, packageUseFlags, packagesFlagsList);
+		printf("Processing file:   %s\n", list_item->c_str());
+		check_use_file(*list_item, useFlags, packageUseFlags, packagesFlagsList);
 	}
 
 	return 0;
@@ -593,17 +600,18 @@ void check_aux_file(const std::string &location, std::map<std::string, std::pair
 
 int check_existance(const std::string &path, bool check = true)
 {
-	std::vector<std::string> filelist;
+	std::set<std::string> filelist;
 	std::map<std::string, std::pair<std::string, int> > locations;
 
 	printf("Checking:          %s\n", path.c_str());
 
 	filelist = find_all_files(path);
 
-	for (size_t i = 0; i < filelist.size(); ++i)
+	std::set<std::string>::const_iterator list_end = filelist.end();
+	for (std::set<std::string>::const_iterator list_item = filelist.begin(); list_item != list_end; ++list_item)
 	{
-		printf("Processing file:   %s\n", filelist.at(i).c_str());
-		check_aux_file(filelist.at(i), locations, check);
+		printf("Processing file:   %s\n", list_item->c_str());
+		check_aux_file(*list_item, locations, check);
 	}
 
 	return 0;

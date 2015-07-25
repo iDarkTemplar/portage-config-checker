@@ -218,7 +218,7 @@ bool Atom::check_installed() const
 	return result;
 }
 
-std::list<Atom> Atom::get_all_installed_packages() const
+std::set<Atom> Atom::get_all_installed_packages() const
 {
 	std::string name_str = m_name;
 
@@ -235,7 +235,7 @@ std::list<Atom> Atom::get_all_installed_packages() const
 	//                          name,          version
 	boost::regex reg_expr("^" + name_str + "\\-([[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*)$");
 
-	std::list<Atom> result;
+	std::set<Atom> result;
 
 	if (!m_valid)
 	{
@@ -267,7 +267,7 @@ std::list<Atom> Atom::get_all_installed_packages() const
 					atom.calculate_atom_and_slot();
 					atom.calculate_full_atom();
 					atom.m_valid = m_valid;
-					result.push_back(atom);
+					result.insert(atom);
 				}
 
 				free(namelist[n]);
@@ -294,7 +294,7 @@ std::list<Atom> Atom::get_all_installed_packages() const
 
 std::string Atom::get_slot_of_package(const std::string &atom_and_version)
 {
-	std::string filename = std::string("/var/db/portage/") + atom_and_version +  std::string("/SLOT");
+	std::string filename = std::string("/var/db/pkg/") + atom_and_version +  std::string("/SLOT");
 	std::string result;
 	FILE *f;
 
