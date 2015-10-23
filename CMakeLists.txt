@@ -4,7 +4,7 @@ cmake_minimum_required( VERSION 2.8.8 )
 
 set(PCC_VERSION_MAJOR 0)
 set(PCC_VERSION_MINOR 4)
-set(PCC_VERSION_PATCH 0)
+set(PCC_VERSION_PATCH 1)
 set(PCC_VERSION "${PCC_VERSION_MAJOR}.${PCC_VERSION_MINOR}.${PCC_VERSION_PATCH}")
 
 set(CPACK_PACKAGE_VERSION_MAJOR ${PCC_VERSION_MAJOR})
@@ -19,10 +19,13 @@ set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${PCC_VERSION}")
 include(CPack)
 
 # installation directory configuration
-set(INST_PREFIX "/usr" CACHE PATH "Prefix prepended to install directories")
-set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
-
-message(STATUS "To change installation directory use -DINST_PREFIX=path, for example, -DINST_PREFIX=/usr")
+set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)")
+set(EXEC_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX} CACHE PATH "Installation prefix for executables and object code libraries" FORCE)
+set(BIN_INSTALL_DIR ${EXEC_INSTALL_PREFIX}/bin CACHE PATH "Installation prefix for user executables" FORCE)
+set(SBIN_INSTALL_DIR ${EXEC_INSTALL_PREFIX}/sbin CACHE PATH "Installation prefix for user executables" FORCE)
+set(LIB_INSTALL_DIR ${EXEC_INSTALL_PREFIX}/lib${LIB_SUFFIX} CACHE PATH  "Installation prefix for object code libraries" FORCE)
+set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/include CACHE PATH "Installation prefix for C header files" FORCE)
+set(DATA_PREFIX "${CMAKE_INSTALL_PREFIX}/share" CACHE PATH "Prefix prepended to data install directories" FORCE)
 
 FIND_PACKAGE( Boost COMPONENTS regex REQUIRED )
 INCLUDE_DIRECTORIES( ${Boost_INCLUDE_DIR} )
@@ -49,4 +52,4 @@ add_executable( portage-config-checker ${SOURCES} ${HEADERS})
 target_link_libraries( portage-config-checker ${Boost_LIBRARIES} )
 
 # installation config
-install(TARGETS portage-config-checker RUNTIME DESTINATION ./bin)
+install(TARGETS portage-config-checker RUNTIME DESTINATION ${BIN_INSTALL_DIR})
