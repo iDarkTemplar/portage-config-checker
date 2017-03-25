@@ -54,7 +54,17 @@ bool check_use_name(const std::string &flag)
 
 void check_use_flag_existance(const std::string &flag, const std::string &location)
 {
-	FILE *make_pipe = popen(("equery hasuse " + (full_make_check)?("-p -o "):("") + flag + " | wc -l").c_str(), "r");
+	std::stringstream query;
+	query << "equery hasuse ";
+
+	if (full_make_check)
+	{
+		query << "-p -o ";
+	}
+
+	query << flag << " | wc -l";
+
+	FILE *make_pipe = popen(query.str().c_str(), "r");
 	if (make_pipe != NULL)
 	{
 		std::string result_string;
