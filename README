@@ -1,0 +1,15 @@
+Portage config checker is a tool for searching duplicate or obsolete records related to portage atoms or USE-flags in portage config files.
+It doesn't modify any configuration files, and thus it doesn't require any privileges to run, and it's up to user to update configs.
+
+Options:
+	--help - shows available options
+	--make-check - quick make.conf USE-flags existance check
+	--full-make-check - full make.conf USE-flags existance check
+		Warning: may take very long time,
+		because it checks whether any package has this USE-flag,
+		even if the package itself is not installed
+	-a - check all use flags, not only for current installed packages
+		when searching for obsolete packages
+	--skip-uses - skip USE-flags check
+	--skip-else - skip other checks:
+		skips atom existance checks in other portage config files, like package.keywords

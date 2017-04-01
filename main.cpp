@@ -662,11 +662,14 @@ int main(int argc, char **argv)
 					"\t--help - shows this info\n"
 					"\t--make-check - quick make.conf USE-flags existance check\n"
 					"\t--full-make-check - full make.conf USE-flags existance check\n"
-					"\t\tWarning: may take very long time\n"
+					"\t\tWarning: may take very long time,\n"
+					"\t\tbecause it checks whether any package has this USE-flag,\n"
+					"\t\teven if the package itself is not installed\n"
 					"\t-a - check all use flags, not only for current installed packages\n"
 					"\t\twhen searching for obsolete packages\n"
 					"\t--skip-uses - skip USE-flags check\n"
-					"\t--skip-else - skip other checks\n"
+					"\t--skip-else - skip other checks:\n"
+					"\t\tskips atom existance checks in other portage config files, like package.keywords\n"
 				);
 
 			return 0;
