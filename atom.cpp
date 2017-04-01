@@ -26,6 +26,7 @@
 #include <string.h>
 #include <libgen.h>
 
+#include <tuple>
 #include <boost/regex.hpp>
 
 Atom::Atom()
@@ -49,8 +50,8 @@ Atom::Atom(const std::string &const_name)
 		"([[:alpha:]](?:[[:alnum:]]|\\+)*(?:[\\-_\\.][[:alpha:]](?:[[:alnum:]]|\\+)*)*)"
 		// version
 		"(?:\\-([[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*))?"
-		// slot
-		"(?:\\:([[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*))?"
+		// slot + subslot
+		"(?:\\:([[:digit:]][[:alnum:]]*(?:[\\-_\\./][[:alnum:]]+)*))?"
 		// repository
 		"(?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?"
 		"$");
@@ -91,11 +92,12 @@ Atom::Atom(const std::string &const_name)
 		m_category   = reg_results.str(2);
 		m_name       = reg_results.str(3);
 		m_version    = reg_results.str(4);
-		m_slot       = reg_results.str(5);
+		std::tie(m_slot, m_subslot) = split_slot_and_subslot(reg_results.str(5));
 		m_repository = reg_results.str(6);
 
 		calculate_atom();
 		calculate_atom_and_slot();
+		calculate_atom_and_slot_and_subslot();
 		calculate_full_atom();
 		m_valid = true;
 	}
@@ -135,9 +137,19 @@ const std::string& Atom::slot() const
 	return m_slot;
 }
 
+const std::string& Atom::subslot() const
+{
+	return m_subslot;
+}
+
 const std::string& Atom::atom_and_slot() const
 {
 	return m_atom_and_slot;
+}
+
+const std::string& Atom::atom_and_slot_and_subslot() const
+{
+	return m_atom_and_slot_and_subslot;
 }
 
 const std::string& Atom::full_atom() const
@@ -193,7 +205,14 @@ bool Atom::check_installed() const
 			{
 				if (boost::regex_match(std::string(namelist[n]->d_name), reg_expr))
 				{
-					result = true;
+					std::string slot, subslot;
+					std::tie(slot, subslot) = split_slot_and_subslot(get_slot_of_package(m_category + std::string("/") + std::string(namelist[n]->d_name)));
+
+					if (((m_slot.empty()) || (m_slot == slot))
+						&& ((m_subslot.empty()) || (m_subslot == subslot)))
+					{
+						result = true;
+					}
 				}
 
 				free(namelist[n]);
@@ -262,9 +281,10 @@ std::set<Atom> Atom::get_all_installed_packages() const
 					atom.m_category = m_category;
 					atom.m_name = m_name;
 					atom.m_version = reg_results.str(1);
-					atom.m_slot = get_slot_of_package(m_category + std::string("/") + std::string(namelist[n]->d_name));
+					std::tie(atom.m_slot, atom.m_subslot) = split_slot_and_subslot(get_slot_of_package(m_category + std::string("/") + std::string(namelist[n]->d_name)));
 					atom.calculate_atom();
 					atom.calculate_atom_and_slot();
+					atom.calculate_atom_and_slot_and_subslot();
 					atom.calculate_full_atom();
 					atom.m_valid = m_valid;
 					result.insert(atom);
@@ -329,6 +349,19 @@ std::string Atom::get_slot_of_package(const std::string &atom_and_version)
 	return result;
 }
 
+std::tuple<std::string, std::string> Atom::split_slot_and_subslot(const std::string &input)
+{
+	std::string::size_type pos = input.find('/');
+	if ((pos == std::string::npos) || (pos == input.length() - 1))
+	{
+		return std::make_tuple(input, std::string());
+	}
+	else
+	{
+		return std::make_tuple(input.substr(0, pos), input.substr(pos + 1));
+	}
+}
+
 void Atom::calculate_atom()
 {
 	m_atom = m_category + std::string("/") + m_name;
@@ -346,51 +379,65 @@ void Atom::calculate_atom_and_slot()
 	m_atom_and_slot = m_atom + slot;
 }
 
+void Atom::calculate_atom_and_slot_and_subslot()
+{
+	m_atom_and_slot_and_subslot = m_atom_and_slot;
+
+	if (!m_subslot.empty())
+	{
+		m_atom_and_slot_and_subslot += std::string("/") + m_subslot;
+	}
+}
+
 void Atom::calculate_full_atom()
 {
-	std::string v;
-	std::string slot;
-	std::string repo;
-	std::string ver;
+	std::stringstream full_atom_stream;
 
 	switch (m_vop)
 	{
 	case version_gt:
-		v = std::string(">");
+		full_atom_stream << ">";
 		break;
 	case version_lt:
-		v = std::string("<");
+		full_atom_stream << "<";
 		break;
 	case version_eq:
-		v = std::string("=");
+		full_atom_stream << "=";
 		break;
 	case version_gt_eq:
-		v = std::string(">=");
+		full_atom_stream << ">=";
 		break;
 	case version_lt_eq:
-		v = std::string("<=");
+		full_atom_stream << "<=";
 		break;
 	case version_none:
 	default:
 		break;
 	}
 
+	full_atom_stream << m_atom;
+
+	if (!m_version.empty())
+	{
+		full_atom_stream << "-" << m_version;
+	}
+
 	if (!m_slot.empty())
 	{
-		slot = ":" + m_slot;
+		full_atom_stream << ":" << m_slot;
+
+		if (!m_subslot.empty())
+		{
+			full_atom_stream << "/" << m_subslot;
+		}
 	}
 
 	if (!m_repository.empty())
 	{
-		repo = "::" + m_repository;
+		full_atom_stream << "::" << m_repository;
 	}
 
-	if (!m_version.empty())
-	{
-		ver = std::string("-") + m_version;
-	}
-
-	m_full_atom = v + m_atom + ver + slot + repo;
+	m_full_atom = full_atom_stream.str();
 }
 
 Atom& Atom::operator=(const Atom &other)
@@ -403,6 +450,7 @@ Atom& Atom::operator=(const Atom &other)
 		this->m_vop        = other.m_vop;
 		this->m_version    = other.m_version;
 		this->m_slot       = other.m_slot;
+		this->m_subslot    = other.m_subslot;
 		this->m_repository = other.m_repository;
 
 		this->m_atom          = other.m_atom;
@@ -415,25 +463,12 @@ Atom& Atom::operator=(const Atom &other)
 
 bool Atom::operator<(const Atom &other) const
 {
-	return (this->m_name < other.m_name)
-		|| ((this->m_name == other.m_name)
-			&& ((this->m_category < other.m_category)
-				|| ((this->m_category == other.m_category)
-					&& ((this->m_vop < other.m_vop)
-						|| ((this->m_vop == other.m_vop)
-							&& ((this->m_version < other.m_version)
-								|| ((this->m_version == other.m_version)
-									&& ((this->m_slot < other.m_slot)
-										|| ((this->m_slot == other.m_slot)
-											&& (this->m_repository < other.m_repository))))))))));
+	return (std::make_tuple(this->m_name, this->m_category, this->m_vop, this->m_version, this->m_slot, this->m_subslot, this->m_repository)
+	      < std::make_tuple(other.m_name, other.m_category, other.m_vop, other.m_version, other.m_slot, other.m_subslot, other.m_repository));
 }
 
 bool Atom::operator==(const Atom &other) const
 {
-	return (this->m_name       == other.m_name)
-		&& (this->m_category   == other.m_category)
-		&& (this->m_vop        == other.m_vop)
-		&& (this->m_version    == other.m_version)
-		&& (this->m_slot       == other.m_slot)
-		&& (this->m_repository == other.m_repository);
+	return (std::make_tuple(this->m_name, this->m_category, this->m_vop, this->m_version, this->m_slot, this->m_subslot, this->m_repository)
+	     == std::make_tuple(other.m_name, other.m_category, other.m_vop, other.m_version, other.m_slot, other.m_subslot, other.m_repository));
 }

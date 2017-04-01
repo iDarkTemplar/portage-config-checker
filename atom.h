@@ -51,7 +51,9 @@ public:
 	const std::string& category() const;
 	const std::string& version() const;
 	const std::string& slot() const;
+	const std::string& subslot() const;
 	const std::string& atom_and_slot() const;
+	const std::string& atom_and_slot_and_subslot() const;
 	const std::string& full_atom() const;
 	const std::string& repository() const;
 	version_op vop() const;
@@ -63,6 +65,7 @@ private:
 	Atom();
 
 	static std::string get_slot_of_package(const std::string &atom_and_version);
+	static std::tuple<std::string, std::string> split_slot_and_subslot(const std::string &input);
 
 	bool m_valid;
 	std::string m_name;
@@ -70,16 +73,19 @@ private:
 	version_op m_vop;
 	std::string m_version;
 	std::string m_slot;
+	std::string m_subslot;
 	std::string m_repository;
 
 	// constructed values
 	std::string m_atom;
 	std::string m_atom_and_slot;
+	std::string m_atom_and_slot_and_subslot;
 	std::string m_full_atom;
 
 	// construction functions
 	void calculate_atom();
 	void calculate_atom_and_slot();
+	void calculate_atom_and_slot_and_subslot();
 	void calculate_full_atom();
 };
 
