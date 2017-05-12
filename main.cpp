@@ -216,165 +216,162 @@ void check_use_file(const std::string &location, std::map<std::string, UseFlag>&
 				{
 					file_is_empty = false;
 					Atom atom(data.at(0));
-					bool valid = atom.is_valid() && (atom.vop() == Atom::version_none) && (atom.version().empty());
 
-					if (!valid)
+					if (atom.is_valid() && (atom.vop() == Atom::version_none) && (atom.version().empty()))
 					{
-						printf("Error in file %s at line %d: invalid or formated unsupported way atom %s\n", location.c_str(), line, data.at(0).c_str());
-					}
-
-					valid = atom.check_installed();
-
-					if (!valid)
-					{
-						printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, atom.full_atom().c_str());
-					}
-
-					got_flag = false;
-
-					for (std::vector<std::string>::iterator i = data.begin() + 1; i != data.end(); ++i)
-					{
-						valid = check_use_name(*i);
-
-						if (valid)
+						if (!atom.check_installed())
 						{
-							got_flag = true;
+							printf("Error in file %s at line %d: atom %s is not installed\n", location.c_str(), line, atom.full_atom().c_str());
+						}
 
-							bool enabled = true;
+						got_flag = false;
 
-							if ((*i)[0] == '-')
+						for (std::vector<std::string>::iterator i = data.begin() + 1; i != data.end(); ++i)
+						{
+							if (check_use_name(*i))
 							{
-								enabled = false;
-								(*i).erase(0, 1);
-							}
+								got_flag = true;
 
-							// if contains same flag in same state in make.conf
-							std::map<std::string, UseFlag>::iterator useFlagIter;
-							useFlagIter = useFlags.find(*i);
+								bool enabled = true;
 
-							if (useFlagIter != useFlags.end())
-							{
-								if (useFlagIter->second.getLastValue() == enabled)
+								if ((*i)[0] == '-')
 								{
-									printf("Error in file %s at line %d: USE-flag %s for atom %s already set to same value in %s\n", location.c_str(), line, (*i).c_str(), atom.atom_and_slot_and_subslot().c_str(), useFlagIter->second.getLocation().c_str());
+									enabled = false;
+									(*i).erase(0, 1);
 								}
-							}
 
-							// same flag in some other files, then warning
-							UseFlag useFlag;
+								// if contains same flag in same state in make.conf
+								std::map<std::string, UseFlag>::iterator useFlagIter;
+								useFlagIter = useFlags.find(*i);
 
-							std::map<std::pair<std::string, Atom>, UseFlag>::iterator packageUseFlagIter;
-							packageUseFlagIter = packageUseFlags.find(std::make_pair((*i), atom));
-
-							if (packageUseFlagIter != packageUseFlags.end())
-							{
-								useFlag = packageUseFlagIter->second;
-								printf("Error in file %s at line %d: USE-flag %s for atom %s set to state %s already set in file %s to state %s\n",location.c_str(), line, (*i).c_str(), atom.atom_and_slot_and_subslot().c_str(), enabled?("Enabled"):("Disabled"), packageUseFlagIter->second.getLocation().c_str(), packageUseFlagIter->second.getLastValue()?("Enabled"):("Disabled"));
-							}
-
-							int linelen;
-							linelen = snprintf(NULL, 0, "%d", line);
-							if (linelen > 0)
-							{
-								char linebuf[linelen + 1];
-								int res;
-
-								res = snprintf(linebuf, linelen + 1, "%d", line);
-
-								if (res == linelen)
+								if (useFlagIter != useFlags.end())
 								{
-									useFlag.setLocation(location + std::string(" at line ") + std::string(linebuf));
+									if (useFlagIter->second.getLastValue() == enabled)
+									{
+										printf("Error in file %s at line %d: USE-flag %s for atom %s already set to same value in %s\n", location.c_str(), line, (*i).c_str(), atom.atom_and_slot_and_subslot().c_str(), useFlagIter->second.getLocation().c_str());
+									}
+								}
+
+								// same flag in some other files, then warning
+								UseFlag useFlag;
+
+								std::map<std::pair<std::string, Atom>, UseFlag>::iterator packageUseFlagIter;
+								packageUseFlagIter = packageUseFlags.find(std::make_pair((*i), atom));
+
+								if (packageUseFlagIter != packageUseFlags.end())
+								{
+									useFlag = packageUseFlagIter->second;
+									printf("Error in file %s at line %d: USE-flag %s for atom %s set to state %s already set in file %s to state %s\n",location.c_str(), line, (*i).c_str(), atom.atom_and_slot_and_subslot().c_str(), enabled?("Enabled"):("Disabled"), packageUseFlagIter->second.getLocation().c_str(), packageUseFlagIter->second.getLastValue()?("Enabled"):("Disabled"));
+								}
+
+								int linelen;
+								linelen = snprintf(NULL, 0, "%d", line);
+								if (linelen > 0)
+								{
+									char linebuf[linelen + 1];
+									int res;
+
+									res = snprintf(linebuf, linelen + 1, "%d", line);
+
+									if (res == linelen)
+									{
+										useFlag.setLocation(location + std::string(" at line ") + std::string(linebuf));
+									}
+									else
+									{
+										useFlag.setLocation(location);
+									}
 								}
 								else
 								{
 									useFlag.setLocation(location);
 								}
-							}
-							else
-							{
-								useFlag.setLocation(location);
-							}
 
-							if (enabled)
-							{
-								useFlag.setEnabled(useFlag.getEnabled()+1);
-							}
-							else
-							{
-								useFlag.setDisabled(useFlag.getDisabled()+1);
-							}
-
-							// Check if uses query was cached for this flag
-							if (packagesFlagsList.find(atom.atom_and_slot_and_subslot()) == packagesFlagsList.end())
-							{
-								if (search_all)
+								if (enabled)
 								{
-									std::string query = std::string("equery uses -a ") + atom.atom_and_slot_and_subslot();
-
-									run_query(query, atom.atom_and_slot_and_subslot(), atom, packagesFlagsList);
+									useFlag.setEnabled(useFlag.getEnabled()+1);
 								}
 								else
 								{
-									std::set<Atom> installed_atoms = atom.get_all_installed_packages();
-									bool found_installed = false;
+									useFlag.setDisabled(useFlag.getDisabled()+1);
+								}
 
-									if (!installed_atoms.empty())
+								// Check if uses query was cached for this flag
+								if (packagesFlagsList.find(atom.atom_and_slot_and_subslot()) == packagesFlagsList.end())
+								{
+									if (search_all)
 									{
-										std::set<Atom>::const_iterator atom_end = installed_atoms.end();
-										for (std::set<Atom>::const_iterator atom_iter = installed_atoms.begin(); atom_iter != atom_end; ++atom_iter)
-										{
-											if (((!atom.slot().empty()) && (atom_iter->slot() != atom.slot()))
-												|| ((!atom.subslot().empty()) && (atom_iter->subslot() != atom.subslot())))
-											{
-												continue;
-											}
-
-											std::stringstream querystream;
-											std::stringstream queryatomstream;
-
-											queryatomstream << "=" << atom_iter->atom() << "-" << atom_iter->version();
-
-											if (!atom_iter->slot().empty())
-											{
-												queryatomstream << ":" << atom_iter->slot();
-
-												if (!atom_iter->subslot().empty())
-												{
-													queryatomstream << "/" << atom_iter->subslot();
-												}
-											}
-
-											querystream << "equery uses " << queryatomstream.str();
-											run_query(querystream.str(), queryatomstream.str(), *atom_iter, packagesFlagsList);
-											found_installed = true;
-										}
-									}
-
-									if (!found_installed)
-									{
-										std::string query = std::string("equery uses ") + atom.atom_and_slot_and_subslot();
+										std::string query = std::string("equery uses -a ") + atom.atom_and_slot_and_subslot();
 
 										run_query(query, atom.atom_and_slot_and_subslot(), atom, packagesFlagsList);
 									}
+									else
+									{
+										std::set<Atom> installed_atoms = atom.get_all_installed_packages();
+										bool found_installed = false;
+
+										if (!installed_atoms.empty())
+										{
+											std::set<Atom>::const_iterator atom_end = installed_atoms.end();
+											for (std::set<Atom>::const_iterator atom_iter = installed_atoms.begin(); atom_iter != atom_end; ++atom_iter)
+											{
+												if (((!atom.slot().empty()) && (atom_iter->slot() != atom.slot()))
+													|| ((!atom.subslot().empty()) && (atom_iter->subslot() != atom.subslot())))
+												{
+													continue;
+												}
+
+												std::stringstream querystream;
+												std::stringstream queryatomstream;
+
+												queryatomstream << "=" << atom_iter->atom() << "-" << atom_iter->version();
+
+												if (!atom_iter->slot().empty())
+												{
+													queryatomstream << ":" << atom_iter->slot();
+
+													if (!atom_iter->subslot().empty())
+													{
+														queryatomstream << "/" << atom_iter->subslot();
+													}
+												}
+
+												querystream << "equery uses " << queryatomstream.str();
+												run_query(querystream.str(), queryatomstream.str(), *atom_iter, packagesFlagsList);
+												found_installed = true;
+											}
+										}
+
+										if (!found_installed)
+										{
+											std::string query = std::string("equery uses ") + atom.atom_and_slot_and_subslot();
+
+											run_query(query, atom.atom_and_slot_and_subslot(), atom, packagesFlagsList);
+										}
+									}
 								}
-							}
 
-							if (packagesFlagsList[atom.atom_and_slot_and_subslot()].find(*i) == packagesFlagsList[atom.atom_and_slot_and_subslot()].end())
+								if (packagesFlagsList[atom.atom_and_slot_and_subslot()].find(*i) == packagesFlagsList[atom.atom_and_slot_and_subslot()].end())
+								{
+									printf("Error in file %s at line %d: USE-flag %s doesn't exist for atom %s\n",location.c_str(),line,(*i).c_str(),atom.atom_and_slot_and_subslot().c_str());
+								}
+
+								packageUseFlags[std::make_pair((*i), atom)] = useFlag;
+							}
+							else
 							{
-								printf("Error in file %s at line %d: USE-flag %s doesn't exist for atom %s\n",location.c_str(),line,(*i).c_str(),atom.atom_and_slot_and_subslot().c_str());
+								printf("Error in file %s at line %d: invalid USE-flag %s\n", location.c_str(), line, (*i).c_str());
 							}
-
-							packageUseFlags[std::make_pair((*i), atom)] = useFlag;
 						}
-						else
+
+						if (!got_flag)
 						{
-							printf("Error in file %s at line %d: invalid USE-flag %s\n", location.c_str(), line, (*i).c_str());
+							printf("Error in file %s at line %d: atom %s doesn't contain any USE-flags\n",location.c_str(),line, atom.atom_and_slot_and_subslot().c_str());
 						}
 					}
-
-					if (!got_flag)
+					else
 					{
-						printf("Error in file %s at line %d: atom %s doesn't contain any USE-flags\n",location.c_str(),line, atom.atom_and_slot_and_subslot().c_str());
+						printf("Error in file %s at line %d: invalid or formated unsupported way atom %s\n", location.c_str(), line, data.at(0).c_str());
 					}
 				}
 

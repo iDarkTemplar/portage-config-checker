@@ -203,7 +203,7 @@ bool Atom::check_installed() const
 		{
 			while (n--)
 			{
-				if (boost::regex_match(std::string(namelist[n]->d_name), reg_expr))
+				if (boost::regex_match(namelist[n]->d_name, reg_expr))
 				{
 					std::string slot, subslot;
 					std::tie(slot, subslot) = split_slot_and_subslot(get_slot_of_package(m_category + std::string("/") + std::string(namelist[n]->d_name)));
@@ -273,9 +273,9 @@ std::set<Atom> Atom::get_all_installed_packages() const
 		{
 			while (n--)
 			{
-				boost::smatch reg_results;
+				boost::cmatch reg_results;
 
-				if (boost::regex_match(std::string(namelist[n]->d_name), reg_results, reg_expr))
+				if (boost::regex_match(namelist[n]->d_name, reg_results, reg_expr))
 				{
 					Atom atom;
 					atom.m_category = m_category;
