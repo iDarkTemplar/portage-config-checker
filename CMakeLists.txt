@@ -4,7 +4,7 @@ cmake_minimum_required( VERSION 2.8.8 )
 
 set(PCC_VERSION_MAJOR 0)
 set(PCC_VERSION_MINOR 5)
-set(PCC_VERSION_PATCH 1)
+set(PCC_VERSION_PATCH 2)
 set(PCC_VERSION "${PCC_VERSION_MAJOR}.${PCC_VERSION_MINOR}.${PCC_VERSION_PATCH}")
 
 set(CPACK_PACKAGE_VERSION_MAJOR ${PCC_VERSION_MAJOR})
@@ -27,9 +27,6 @@ set(LIB_INSTALL_DIR ${EXEC_INSTALL_PREFIX}/lib${LIB_SUFFIX} CACHE PATH  "Install
 set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/include CACHE PATH "Installation prefix for C header files" FORCE)
 set(DATA_PREFIX "${CMAKE_INSTALL_PREFIX}/share" CACHE PATH "Prefix prepended to data install directories" FORCE)
 
-FIND_PACKAGE( Boost COMPONENTS regex REQUIRED )
-INCLUDE_DIRECTORIES( ${Boost_INCLUDE_DIR} )
-
 # don't USE -O3 with GCC, it causes less precise calculations
 if (CMAKE_COMPILER_IS_GNUCC)
 	set (CMAKE_C_FLAGS_RELEASE "-O2 -pipe -march=native -Wall -Wextra")
@@ -43,7 +40,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 	set (CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
 endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+set (CMAKE_CXX_STANDARD 11)
 
 add_definitions(-D_FILE_OFFSET_BITS=64)
 
@@ -51,7 +48,7 @@ set ( SOURCES atom.cpp use_flag.cpp read_file.cpp main.cpp )
 set ( HEADERS atom.h   use_flag.h   read_file.h )
 
 add_executable( portage-config-checker ${SOURCES} ${HEADERS})
-target_link_libraries( portage-config-checker ${Boost_LIBRARIES} )
+target_link_libraries( portage-config-checker )
 
 # installation config
 install(TARGETS portage-config-checker RUNTIME DESTINATION ${BIN_INSTALL_DIR})

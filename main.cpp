@@ -38,7 +38,7 @@
 #include "read_file.h"
 #include "use_flag.h"
 
-#include <boost/regex.hpp>
+#include <regex>
 
 bool make_check = false;
 bool full_make_check = false;
@@ -48,8 +48,8 @@ bool skip_else = false;
 
 bool check_use_name(const std::string &flag)
 {
-	boost::regex reg_expr("[\\-]?[[:alnum:]][\\+[:alnum:]]*(?:[\\-_][[:alnum:]][\\+[:alnum:]]*)*");
-	return boost::regex_match(flag, reg_expr);
+	std::regex reg_expr("[\\-]?[[:alnum:]][\\+[:alnum:]]*(?:[\\-_][[:alnum:]][\\+[:alnum:]]*)*");
+	return std::regex_match(flag, reg_expr);
 }
 
 void check_use_flag_existance(const std::string &flag, const std::string &location)

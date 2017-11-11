@@ -27,7 +27,7 @@
 #include <libgen.h>
 
 #include <tuple>
-#include <boost/regex.hpp>
+#include <regex>
 
 Atom::Atom()
 	: m_valid(false),
@@ -39,7 +39,7 @@ Atom::Atom(const std::string &const_name)
 	: m_valid(false),
 	m_vop(version_none)
 {
-	boost::regex reg_expr("^"
+	std::regex reg_expr("^"
 		// version sign
 		"((?:>|>=|=|<=|<)?)"
 		// category
@@ -56,9 +56,9 @@ Atom::Atom(const std::string &const_name)
 		"(?:\\:\\:([[:alpha:]][[:alnum:]]*(?:[\\-_\\.][[:alpha:]][[:alnum:]]*)*))?"
 		"$");
 
-	boost::smatch reg_results;
+	std::smatch reg_results;
 
-	bool result = boost::regex_match(const_name, reg_results, reg_expr);
+	bool result = std::regex_match(const_name, reg_results, reg_expr);
 	if (result)
 	{
 		if (!reg_results.str(1).empty())
@@ -181,8 +181,8 @@ bool Atom::check_installed() const
 		}
 	}
 
-	//                          name,          version
-	boost::regex reg_expr("^" + name_str + "\\-[[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*$");
+	//                        name,          version
+	std::regex reg_expr("^" + name_str + "\\-[[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*$");
 
 	bool result = false;
 
@@ -203,7 +203,7 @@ bool Atom::check_installed() const
 		{
 			while (n--)
 			{
-				if (boost::regex_match(namelist[n]->d_name, reg_expr))
+				if (std::regex_match(namelist[n]->d_name, reg_expr))
 				{
 					std::string slot, subslot;
 					std::tie(slot, subslot) = split_slot_and_subslot(get_slot_of_package(m_category + std::string("/") + std::string(namelist[n]->d_name)));
@@ -251,8 +251,8 @@ std::set<Atom> Atom::get_all_installed_packages() const
 		}
 	}
 
-	//                          name,          version
-	boost::regex reg_expr("^" + name_str + "\\-([[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*)$");
+	//                        name,          version
+	std::regex reg_expr("^" + name_str + "\\-([[:digit:]][[:alnum:]]*(?:[\\-_\\.][[:alnum:]]+)*)$");
 
 	std::set<Atom> result;
 
@@ -273,9 +273,9 @@ std::set<Atom> Atom::get_all_installed_packages() const
 		{
 			while (n--)
 			{
-				boost::cmatch reg_results;
+				std::cmatch reg_results;
 
-				if (boost::regex_match(namelist[n]->d_name, reg_results, reg_expr))
+				if (std::regex_match(namelist[n]->d_name, reg_results, reg_expr))
 				{
 					Atom atom;
 					atom.m_category = m_category;
